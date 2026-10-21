@@ -514,7 +514,7 @@ function renderTurns() {
     if (a === "repeat") sayEnglish("Please repeat slowly.", L().glossary ? "请慢一点再说一遍。" : null);
     if (a === "save") { saveItem("phrases", { en: t.src, zh: t.tr }); toast("Saved to Phrases"); }
   });
-  $("convCol").scrollTop = $("convCol").scrollHeight;
+  if (turns.length) $("convCol").scrollTop = $("convCol").scrollHeight;
 }
 function editTurn(t) {
   openSheet(`<div class="eyebrow">Correct the ${t.who === "me" ? "English" : "transcript"}</div><h2>What was actually said?</h2><textarea id="editTa" ${t.who === "them" ? 'style="font-family:var(--cjk)"' : ""}>${esc(t.src)}</textarea><button class="btn" id="editOk">Translate again</button>`, () => {
