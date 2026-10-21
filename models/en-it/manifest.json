@@ -1,0 +1,36 @@
+{
+ "pair": "en-it",
+ "architecture": "base-memory",
+ "source": "retrain_hr_fix_names_GPSr_u8PSmC9fOx1ZDCHoA",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enit.s2t.bin.gz",
+   "size": 2209348,
+   "sha256": "cd7ef06c0b872c15286a9796f105eb62693f14665490546ac70ce1c6c8f16d47",
+   "parts": [
+    "lex.50.50.enit.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enit.intgemm.alphas.bin.gz",
+   "size": 23892889,
+   "sha256": "cfff470e9f29e27132723589a8bc985648f92773410e5f6fc43293d9e19f97f1",
+   "parts": [
+    "model.enit.intgemm.alphas.bin.gz.part00",
+    "model.enit.intgemm.alphas.bin.gz.part01",
+    "model.enit.intgemm.alphas.bin.gz.part02",
+    "model.enit.intgemm.alphas.bin.gz.part03",
+    "model.enit.intgemm.alphas.bin.gz.part04",
+    "model.enit.intgemm.alphas.bin.gz.part05"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.enit.spm.gz",
+   "size": 407598,
+   "sha256": "8f99a6f493bf7e1a03fbba19928d7dc7bf9a1b7938238467f3e80a58c0d50485",
+   "parts": [
+    "vocab.enit.spm.gz.part00"
+   ]
+  }
+ }
+}
