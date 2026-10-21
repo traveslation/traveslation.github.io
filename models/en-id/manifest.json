@@ -1,0 +1,33 @@
+{
+ "pair": "en-id",
+ "architecture": "tiny",
+ "source": "spring-2024_bbjDBFoDTNGSUo2if3ET_A",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enid.s2t.bin.gz",
+   "size": 1734565,
+   "sha256": "41853979c81022487542eceed4994078bd144c63fff84a421616f3cc8f3162c1",
+   "parts": [
+    "lex.50.50.enid.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enid.intgemm.alphas.bin.gz",
+   "size": 12503257,
+   "sha256": "08bf854041ee20e955c013f17d86ae562b29388304151071e176b579e78fb0be",
+   "parts": [
+    "model.enid.intgemm.alphas.bin.gz.part00",
+    "model.enid.intgemm.alphas.bin.gz.part01",
+    "model.enid.intgemm.alphas.bin.gz.part02"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.enid.spm.gz",
+   "size": 379806,
+   "sha256": "49af04de6f0e3c21afcb274e7a6931c8f9efae38932e2671b692bf1b6f6d279b",
+   "parts": [
+    "vocab.enid.spm.gz.part00"
+   ]
+  }
+ }
+}
