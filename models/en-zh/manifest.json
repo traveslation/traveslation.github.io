@@ -1,0 +1,46 @@
+{
+ "pair": "en-zh",
+ "architecture": "base-memory",
+ "source": "llmaat_finetune10M_qe8_f2_ByQcSxGXQRqGi-UTxYE43g",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enzh.s2t.bin.gz",
+   "size": 2536039,
+   "sha256": "806f75821c0b838f4a8f4afe5bab3db8289cb7e5187753ba04c3bceadd75687a",
+   "parts": [
+    "lex.50.50.enzh.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enzh.intgemm.alphas.bin.gz",
+   "size": 33375922,
+   "sha256": "7f255403b3bb2502f08ac4d5ca397a8a5a13f899d2f2e987a4934e089d241d16",
+   "parts": [
+    "model.enzh.intgemm.alphas.bin.gz.part00",
+    "model.enzh.intgemm.alphas.bin.gz.part01",
+    "model.enzh.intgemm.alphas.bin.gz.part02",
+    "model.enzh.intgemm.alphas.bin.gz.part03",
+    "model.enzh.intgemm.alphas.bin.gz.part04",
+    "model.enzh.intgemm.alphas.bin.gz.part05",
+    "model.enzh.intgemm.alphas.bin.gz.part06",
+    "model.enzh.intgemm.alphas.bin.gz.part07"
+   ]
+  },
+  "srcVocab": {
+   "name": "srcvocab.enzh.spm.gz",
+   "size": 407784,
+   "sha256": "7846e3c236388390f4e5d321f8413d67f34c1bab5f066165eeb673bfd07607cc",
+   "parts": [
+    "srcvocab.enzh.spm.gz.part00"
+   ]
+  },
+  "trgVocab": {
+   "name": "trgvocab.enzh.spm.gz",
+   "size": 425748,
+   "sha256": "4d641ce165b1f8478ee2ffb5149d2d46fab3779dc8fa1e9b97f9af1d2206c091",
+   "parts": [
+    "trgvocab.enzh.spm.gz.part00"
+   ]
+  }
+ }
+}
