@@ -1,0 +1,37 @@
+{
+ "pair": "ko-en",
+ "architecture": "base-memory",
+ "source": "cjk_retrain_base-memory_QgYNtG3BTzKBFSV1wl06Pg",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.koen.s2t.bin.gz",
+   "size": 4381854,
+   "sha256": "92d595d9e7cab334cf4560c4f66d0439bc4b9aeb644852f4eb280ccaf9aed587",
+   "parts": [
+    "lex.50.50.koen.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.koen.intgemm.alphas.bin.gz",
+   "size": 32152814,
+   "sha256": "1fa9af76c6a954fce14243d698c02edea38b74b1f3d149ca6a4d7f8f88ba1b92",
+   "parts": [
+    "model.koen.intgemm.alphas.bin.gz.part00",
+    "model.koen.intgemm.alphas.bin.gz.part01",
+    "model.koen.intgemm.alphas.bin.gz.part02",
+    "model.koen.intgemm.alphas.bin.gz.part03",
+    "model.koen.intgemm.alphas.bin.gz.part04",
+    "model.koen.intgemm.alphas.bin.gz.part05",
+    "model.koen.intgemm.alphas.bin.gz.part06"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.koen.spm.gz",
+   "size": 706864,
+   "sha256": "3b17fba7f58bde82f4ebd7ea0f51fa96fc22c8c5c20a4e905e0498f6da0ca46c",
+   "parts": [
+    "vocab.koen.spm.gz.part00"
+   ]
+  }
+ }
+}
