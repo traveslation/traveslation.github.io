@@ -1,0 +1,35 @@
+{
+ "pair": "ar-en",
+ "architecture": "base-memory",
+ "source": "retrain_base-memory_X9fDxFreTOCslPKzb1CXTg",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.aren.s2t.bin.gz",
+   "size": 2259861,
+   "sha256": "59335a02934f19f5e9bf171de9db8b73b5e95a69dce03a7d2fe6e9e43e3f849e",
+   "parts": [
+    "lex.50.50.aren.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.aren.intgemm.alphas.bin.gz",
+   "size": 23224456,
+   "sha256": "31e032a402a8463a1e19c8e355529f73c0732926b22b1eadc8bade39ecc23a80",
+   "parts": [
+    "model.aren.intgemm.alphas.bin.gz.part00",
+    "model.aren.intgemm.alphas.bin.gz.part01",
+    "model.aren.intgemm.alphas.bin.gz.part02",
+    "model.aren.intgemm.alphas.bin.gz.part03",
+    "model.aren.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.aren.spm.gz",
+   "size": 416700,
+   "sha256": "c379c52857c2f0886ae52a255ac770e5992524782ee20bb0966deca079e9595f",
+   "parts": [
+    "vocab.aren.spm.gz.part00"
+   ]
+  }
+ }
+}
