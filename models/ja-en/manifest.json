@@ -1,0 +1,38 @@
+{
+ "pair": "ja-en",
+ "architecture": "base-memory",
+ "source": "cjk_retrain_base-memory_NLRJLD_pQFyrvgKtbie2nA",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.jaen.s2t.bin.gz",
+   "size": 4819610,
+   "sha256": "438152f5ccd982edb43e88ef51305e3ae7c7b66ee5c20a8fa425e9f1822f9b9b",
+   "parts": [
+    "lex.50.50.jaen.s2t.bin.gz.part00",
+    "lex.50.50.jaen.s2t.bin.gz.part01"
+   ]
+  },
+  "model": {
+   "name": "model.jaen.intgemm.alphas.bin.gz",
+   "size": 32577435,
+   "sha256": "ae56ffbb5556d8e4240b2f208a7c7a2449a4b627ac9d673981ed29eaadaab79d",
+   "parts": [
+    "model.jaen.intgemm.alphas.bin.gz.part00",
+    "model.jaen.intgemm.alphas.bin.gz.part01",
+    "model.jaen.intgemm.alphas.bin.gz.part02",
+    "model.jaen.intgemm.alphas.bin.gz.part03",
+    "model.jaen.intgemm.alphas.bin.gz.part04",
+    "model.jaen.intgemm.alphas.bin.gz.part05",
+    "model.jaen.intgemm.alphas.bin.gz.part06"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.jaen.spm.gz",
+   "size": 746616,
+   "sha256": "12d693f5055525d5cc1e133c8c1b8ed787c77b9bb797400d9a14382ac69c1236",
+   "parts": [
+    "vocab.jaen.spm.gz.part00"
+   ]
+  }
+ }
+}
