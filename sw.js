@@ -1,5 +1,5 @@
 /* Service worker: app shell precached; OCR data and runtime cached on first use. Translation models are cached by mt.js in Cache storage. */
-const VERSION = "tv-v2";
+const VERSION = "tv-v3";
 const SHELL = ["./", "./index.html", "./app.js", "./mt.js", "./glossary.js", "./asr-worker.js", "./manifest.webmanifest",
   "./vendor/bergamot/translator-worker.js", "./vendor/bergamot/bergamot-translator-worker.js", "./vendor/bergamot/bergamot-translator-worker.wasm",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png", "./tessdata/eng.traineddata.gz",
@@ -7,7 +7,7 @@ const SHELL = ["./", "./index.html", "./app.js", "./mt.js", "./glossary.js", "./
   "https://cdn.jsdelivr.net/npm/pinyin-pro@3.26.0/dist/index.min.js", "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/transformers.min.js"];
 const RUNTIME_HOSTS = ["cdn.jsdelivr.net"];
 self.addEventListener("install", e => { e.waitUntil((async () => { const c = await caches.open(VERSION); await Promise.all(SHELL.map(u => c.add(new Request(u, { cache: "reload" })).catch(err => console.warn("precache miss", u)))); self.skipWaiting(); })()); });
-self.addEventListener("activate", e => { e.waitUntil((async () => { for (const k of await caches.keys()) if (k.startsWith("tv-v") && k !== VERSION) await caches.delete(k); await self.clients.claim(); })()); });
+self.addEventListener("activate", e => { e.waitUntil((async () => { for (const k of await caches.keys()) if (k !== VERSION && k !== "tv-models-v1" && !k.startsWith("transformers")) await caches.delete(k); await self.clients.claim(); })()); });
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url); if (e.request.method !== "GET") return;
   if (url.hostname.includes("huggingface.co") || url.hostname.includes("hf.co")) return;

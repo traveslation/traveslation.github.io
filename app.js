@@ -131,20 +131,19 @@ async function loadAsr() { if (res.asr === "ok") return; res.asr = "busy"; updat
 /* First open: stock the current language, with one progress strip. */
 const strip = $("strip"); let stocking = false;
 function stripProgress() {
-  const parts = ["ocr", "toEn", "fromEn", "asr"];
+  const parts = ["ocr", "toEn", "fromEn"];
   const pct = parts.reduce((t, p) => t + (res[p] === "ok" ? 1 : progress[p] || 0), 0) / parts.length * 100;
   $("stripBar").style.width = pct.toFixed(1) + "%"; $("stripPct").textContent = pct.toFixed(0) + "%";
 }
 async function autoStock() {
   if (stocking) return; stocking = true;
   try {
-    const need = res.ocr !== "ok" || res.toEn !== "ok" || res.fromEn !== "ok" || res.asr !== "ok";
+    const need = res.ocr !== "ok" || res.toEn !== "ok" || res.fromEn !== "ok";
     if (!need) return;
     const offline = !navigator.onLine;
     strip.classList.add("on"); $("stripLabel").textContent = "Getting " + L().name + " ready"; stripProgress();
     try {
       await Promise.all([getOcr().catch(e => { if (!offline) throw e; }), loadMT("toEn").catch(e => { if (!offline) throw e; }), loadMT("fromEn").catch(e => { if (!offline) throw e; })]);
-      loadAsr().catch(() => {});
       $("stripLabel").textContent = res.toEn === "ok" ? "Ready to use offline" : "Connect to WiFi once to finish setup"; stripProgress();
       setTimeout(() => strip.classList.remove("on"), 2500);
     } catch (e) { console.error(e); $("stripLabel").textContent = "Setup paused: " + (navigator.onLine ? e.message : "no connection"); setTimeout(() => strip.classList.remove("on"), 4500); }
@@ -635,19 +634,27 @@ async function openReadiness() {
     <div class="hr"></div>
     <div class="eyebrow">Other languages</div>
     <div class="packs" id="packs">${otherLangs.map(k => `<div class="pack" data-k="${k}"><span class="n">${esc(LANGS[k].label)}</span><span class="st">…</span><span class="d">Camera, conversation and phrases. About ${PACK_MB[k]} MB.</span><span class="bar"><i></i></span></div>`).join("")}</div>
-    <button class="btn ghost" id="dlAll">Download every language (about ${Object.values(PACK_MB).reduce((a, b) => a + b, 0)} MB)</button>`, async () => {
+    <button class="btn" id="dlAll">Set up for travel: every language + offline speech (about ${Object.values(PACK_MB).reduce((a, b) => a + b, 0) + 80} MB, once, on WiFi)</button>
+    <p class="hint">Do this at home. After it finishes, nothing downloads again, with or without signal.</p>`, async () => {
     $("readyRun").onclick = () => { autoStock(); runChecks(); };
     runChecks();
     const packEls = sheet.querySelectorAll(".pack");
     for (const el of packEls) { const k = el.dataset.k; const ok = (await MT.isCached(toEnPair(k))) && (await MT.isCached(fromEnPair(k))) && store.get("ocr." + LANGS[k].tess); const st = el.querySelector(".st"); st.textContent = ok ? "Ready" : "Tap to download"; st.classList.toggle("ok", !!ok); if (ok) el.querySelector(".bar i").style.width = "100%"; el.onclick = () => { if (!ok) downloadLang(k, el); }; }
-    $("dlAll").onclick = async () => { for (const el of packEls) { if (!el.querySelector(".st").classList.contains("ok")) await downloadLang(el.dataset.k, el).catch(() => {}); } };
+    $("dlAll").onclick = async () => {
+      const todo = [...packEls].filter(el => !el.querySelector(".st").classList.contains("ok"));
+      const btn = $("dlAll"); btn.disabled = true; const t0 = Date.now(); const prog = {}; const totalMB = todo.reduce((s, el) => s + PACK_MB[el.dataset.k], 0) + (res.asr === "ok" ? 0 : 80);
+      const tick = () => { const doneMB = Object.values(prog).reduce((a, b) => a + b, 0); const el = Date.now() - t0; const eta = doneMB > 2 ? Math.max(0, (totalMB - doneMB) / (doneMB / el)) : null; btn.textContent = `Downloading ${Math.round(doneMB)} of ${totalMB} MB` + (eta != null ? ` · about ${Math.ceil(eta / 60000)} min left` : ""); };
+      let i = 0; const lanes = Array.from({ length: 3 }, async () => { while (i < todo.length) { const el = todo[i++]; const k = el.dataset.k; await downloadLang(k, el, p => { prog[k] = p * PACK_MB[k]; tick(); }).catch(() => {}); } });
+      const asrP = res.asr === "ok" ? Promise.resolve() : loadAsr().then(() => { prog.asr = 80; tick(); }).catch(() => {});
+      await Promise.all([...lanes, asrP]); btn.textContent = "Everything is on this phone"; runChecks();
+    };
   });
   async function runChecks() {
     const set = (id, txt, cls) => { const e = $("rc-" + id); if (!e) return; e.textContent = txt; e.className = "st " + (cls || ""); };
     // camera reader: recognise a rendered sample
     try { const w = await getOcr(); const c = document.createElement("canvas"); c.width = 320; c.height = 80; const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, 320, 80); x.fillStyle = "#000"; x.font = `bold 44px ${getComputedStyle(document.body).getPropertyValue("--cjk")}`; x.fillText(L().cjk ? "出口 EXIT" : "EXIT 24", 20, 58); const r = await w.recognize(c); set("cam", /\S/.test(r.data.text) ? "Ready offline" : "Reader loaded, test unclear", "ok"); } catch (e) { set("cam", "Needs download", "no"); }
     try { const a = await MT.translate(L().mt, "en", [L().cjk ? "出口" : "hola"]); const b = await MT.translate("en", L().mt, ["Thank you"]); set("mt", a[0] && b[0] ? "Ready offline" : "Incomplete", a[0] && b[0] ? "ok" : "no"); } catch (e) { set("mt", "Needs download", "no"); }
-    set("sr", res.asr === "ok" ? "Ready offline" : SR ? "Live only (needs signal)" : "Typed input only", res.asr === "ok" ? "ok" : "");
+    set("sr", res.asr === "ok" ? "Ready offline" : store.get("asr") ? "Ready offline" : SR ? "Live only until you download everything" : "Typed input only", (res.asr === "ok" || store.get("asr")) ? "ok" : "");
     set("tts", voice ? "Ready" : "Voice required", voice ? "ok" : "no");
     try { localStorage.setItem("tv.__t", "1"); localStorage.removeItem("tv.__t"); set("saved", "Ready offline", "ok"); } catch (e) { set("saved", "Storage blocked", "no"); }
     const all = ["cam", "mt", "saved"].every(id => $("rc-" + id) && $("rc-" + id).classList.contains("ok"));
@@ -655,12 +662,14 @@ async function openReadiness() {
     note.querySelector(".t").textContent = all ? "You can go offline." : "Not ready yet.";
     note.querySelector(".d").textContent = all ? "Downloaded language resources are ready." + (voice ? "" : ` For spoken playback, add a ${L().name} voice in Settings › Accessibility › Spoken Content › Voices.`) : navigator.onLine ? "Setup is still running or failed. Tap Run the checks again." : "Connect to WiFi once to finish downloading.";
   }
-  async function downloadLang(k, el) {
-    const st = el.querySelector(".st"), bar = el.querySelector(".bar i"); st.textContent = "Downloading"; let p1 = 0, p2 = 0, p3 = 0; const upd = () => bar.style.width = ((p1 + p2 + p3) / 3 * 100).toFixed(0) + "%";
+  async function downloadLang(k, el, onP) {
+    const st = el.querySelector(".st"), bar = el.querySelector(".bar i"); st.textContent = "Downloading"; let p1 = 0, p2 = 0, p3 = 0; const upd = () => { const f = (p1 + p2 + p3) / 3; bar.style.width = (f * 100).toFixed(0) + "%"; onP && onP(f); };
     try {
-      await MT.load(toEnPair(k), p => { p1 = p; upd(); }); await MT.unload(toEnPair(k)); p1 = 1;
-      await MT.load(fromEnPair(k), p => { p2 = p; upd(); }); await MT.unload(fromEnPair(k)); p2 = 1;
-      const r = await fetch("tessdata/" + LANGS[k].tess + ".traineddata.gz"); if (!r.ok) throw new Error("reader data"); await r.arrayBuffer(); store.set("ocr." + LANGS[k].tess, true); p3 = 1; upd();
+      await Promise.all([
+        MT.prefetch(toEnPair(k), p => { p1 = p; upd(); }).then(() => { p1 = 1; upd(); }),
+        MT.prefetch(fromEnPair(k), p => { p2 = p; upd(); }).then(() => { p2 = 1; upd(); }),
+        fetch("tessdata/" + LANGS[k].tess + ".traineddata.gz").then(async r => { if (!r.ok) throw new Error("reader data"); await r.arrayBuffer(); store.set("ocr." + LANGS[k].tess, true); p3 = 1; upd(); }),
+      ]);
       st.textContent = "Ready"; st.classList.add("ok"); el.onclick = null;
     } catch (e) { st.textContent = "Failed, tap to retry"; toast(navigator.onLine ? "Download failed: " + e.message : "You're offline."); throw e; }
   }
@@ -679,7 +688,7 @@ function showView(v) {
   renderOrderBar();
 }
 document.querySelectorAll(".nav button").forEach(b => b.onclick = () => showView(b.dataset.v));
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(e => console.warn("SW", e));
+if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js").catch(e => console.warn("SW", e)); let reloaded = false; navigator.serviceWorker.addEventListener("controllerchange", () => { if (reloaded) return; reloaded = true; if (navigator.serviceWorker.controller) location.reload(); }); }
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
 MT.on(ev => { if (ev.type === "loaded") { if (ev.pair === toEnPair()) res.toEn = "ok"; if (ev.pair === fromEnPair()) res.fromEn = "ok"; updateReady(); } });
 (async () => {

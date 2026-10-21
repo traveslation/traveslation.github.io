@@ -21,7 +21,9 @@ window.MT = (() => {
   async function cacheOpen() { try { return await caches.open(CACHE); } catch (_) { return null; } }
   async function fetchPart(url, c) {
     if (c) { const hit = await c.match(url); if (hit) return hit.arrayBuffer(); }
-    const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("Download failed: " + url.split("/").pop());
+    let r, lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) { try { r = await fetch(url, { cache: "no-store" }); if (r.ok) break; lastErr = new Error("Download failed: " + url.split("/").pop()); } catch (e) { lastErr = e; } r = null; await new Promise(res => setTimeout(res, 600 * (attempt + 1))); }
+    if (!r) throw lastErr || new Error("Download failed");
     const buf = await r.arrayBuffer();
     if (c) { try { await c.put(url, new Response(buf, { headers: { "Content-Type": "application/octet-stream" } })); } catch (e) { console.warn("cache put", e); } }
     return buf;
@@ -41,10 +43,14 @@ window.MT = (() => {
     if (c) { try { await c.put(base + "manifest.json", new Response(JSON.stringify(manifest), { headers: { "Content-Type": "application/json" } })); } catch (_) {} }
     const entries = Object.entries(manifest.files);
     const total = entries.reduce((s, [, f]) => s + f.size, 0); let done = 0;
+    // every part of every file at once, a few at a time
+    const jobs = []; for (const [role, f] of entries) f.parts.forEach((p, i) => jobs.push({ role, i, url: base + p }));
+    const results = {}; let next = 0;
+    async function lane() { while (next < jobs.length) { const j = jobs[next++]; const b = await fetchPart(j.url, c); (results[j.role] ||= [])[j.i] = b; done += b.byteLength; onProgress && onProgress(done / total); } }
+    await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, lane));
     const out = {};
     for (const [role, f] of entries) {
-      const parts = await Promise.all(f.parts.map(async (p) => { const b = await fetchPart(base + p, c); done += b.byteLength; onProgress && onProgress(done / total); return b; }));
-      const joined = new Uint8Array(f.size); let o = 0; for (const p of parts) { joined.set(new Uint8Array(p), o); o += p.byteLength; }
+      const parts = results[role] || []; const joined = new Uint8Array(f.size); let o = 0; for (const p of parts) { joined.set(new Uint8Array(p), o); o += p.byteLength; }
       if (o !== f.size) throw new Error("Language file is incomplete: " + f.name);
       out[role] = await gunzip(joined.buffer);
     }
@@ -82,7 +88,8 @@ window.MT = (() => {
     const out = clean.map(() => ""); idx.forEach((i, k) => { out[i] = (res[k].target.text || "").trim(); });
     return out;
   }
+  async function prefetch(pair, onProgress) { await fetchPair(pair, onProgress); }
   async function unload(pair) { if (!loaded.has(pair)) return; const [from, to] = pair.split("-"); await call("freeTranslationModel", [{ from, to }]); loaded.delete(pair); }
   async function removeCached(pair) { const c = await cacheOpen(); if (!c) return; const base = MODELS_BASE + pair + "/"; for (const r of await c.keys()) if (r.url.includes(base)) await c.delete(r); }
-  return { load, translate, unload, isCached, removeCached, isLoaded: p => loaded.has(p), on: l => listeners.add(l) };
+  return { load, translate, unload, prefetch, isCached, removeCached, isLoaded: p => loaded.has(p), on: l => listeners.add(l) };
 })();
