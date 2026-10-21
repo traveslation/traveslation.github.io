@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Traveslation</title>
+<meta name="description" content="Point your camera or hold the mic. Reads and listens in the local language and gives you English, on the phone itself.">
+<meta name="theme-color" content="#121633">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Traveslation">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg0:#0F1230; --bg1:#1B1A4B; --panel:rgba(255,255,255,.07); --panel2:rgba(255,255,255,.12); --line:rgba(255,255,255,.14);
+  --fg:#F6F4FF; --muted:#A9A6D1; --gold:#FFC46B; --coral:#FF6F91; --coral2:#FF8E53; --sea:#4FE3D1; --ok:#6EE7A8; --danger:#FF7A7A;
+  --display:"Avenir Next","SF Pro Display","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --cjk:"PingFang SC","Hiragino Sans","Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  --grad:linear-gradient(135deg,var(--coral),var(--coral2));
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(120% 80% at 80% -10%,#3B2A7A 0%,transparent 55%),radial-gradient(90% 60% at -10% 100%,#0E5A62 0%,transparent 55%),linear-gradient(180deg,var(--bg0),var(--bg1));
+  background-attachment:fixed;color:var(--fg);font:16px/1.45 var(--body);overflow:hidden;-webkit-text-size-adjust:100%;padding-top:env(safe-area-inset-top,0px)}
+button{font:inherit;color:inherit}
+.app{height:100%;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px))}
+.brand{font:800 20px/1 var(--display);letter-spacing:-.02em;background:linear-gradient(90deg,#fff,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+.pill{appearance:none;border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px;cursor:pointer}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px var(--gold)}
+.pill.ready .dot{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+.pill.busy .dot{background:var(--sea);animation:pulse 1s infinite}
+.strip{display:none;align-items:center;gap:10px;margin:0 max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px));padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;font-size:13px}
+.strip.on{display:flex}
+.strip .bar{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.strip .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--sea),var(--gold));transition:width .3s}
+.strip b{white-space:nowrap}
+@keyframes pulse{50%{opacity:.3}}
+main{flex:1;min-height:0;position:relative}
+.view{position:absolute;inset:0;display:none;flex-direction:column;min-height:0}
+.view.on{display:flex}
+.nav{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:rgba(10,12,40,.75);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+  padding:8px max(12px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.nav button{appearance:none;border:0;background:transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:14px;font-size:12px;font-weight:700;cursor:pointer}
+.nav button svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.nav button.on{color:#fff;background:var(--grad);box-shadow:0 6px 20px rgba(255,111,145,.35)}
+.nav button:focus-visible,.pill:focus-visible,.btn:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
+.lang{appearance:none;-webkit-appearance:none;border:1px solid var(--line);background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23F6F4FF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center/16px;
+  backdrop-filter:blur(10px);color:var(--fg);border-radius:999px;padding:8px 34px 8px 14px;font-size:14px;font-weight:700;max-width:100%}
+.lang option{color:#000}
+
+/* Camera */
+.stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden;border-radius:0 0 22px 22px}
+video{width:100%;height:100%;object-fit:cover;display:block}
+canvas.overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.stage .topbar{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.stage .lang{background-color:rgba(15,18,48,.8);flex:0 1 auto;max-width:52%}
+.stage .chip{flex:1;text-align:center;background:rgba(15,18,48,.72);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage .chip.hot{background:rgba(79,227,209,.92);border-color:transparent;color:#06211F}
+.stage .ctl{position:absolute;right:10px;bottom:10px;display:flex;gap:8px}
+.rbtn{appearance:none;border:1px solid var(--line);width:46px;height:46px;border-radius:50%;background:rgba(15,18,48,.72);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.rbtn svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.rbtn.on{background:var(--grad);border-color:transparent}
+.sheet{max-height:46%;overflow:auto;padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px))}
+.sheet:empty{display:none}
+.line{display:flex;flex-direction:column;gap:3px;padding:10px 0;border-bottom:1px solid var(--line)}
+.line:last-child{border-bottom:0}
+.line .en{font:700 clamp(19px,5.2vw,25px)/1.28 var(--display)}
+.line .src{font-family:var(--cjk);font-size:14px;color:var(--gold)}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:14px 8px}
+
+/* Listen */
+.col{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:10px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px))}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>*{min-width:0}
+select,textarea{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 12px;width:100%}
+textarea{min-height:84px;resize:vertical}
+textarea::placeholder{color:var(--muted)}
+.lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg button{appearance:none;border:0;background:transparent;color:var(--muted);padding:7px 13px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer}
+.seg button.on{background:var(--panel2);color:#fff}
+.transcript{flex:1;min-height:0;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px}
+.utt{padding:9px 0;border-bottom:1px solid var(--line)}
+.utt:last-child{border-bottom:0}
+.utt .en{font:700 clamp(19px,5.5vw,26px)/1.3 var(--display)}
+.utt .src{font-family:var(--cjk);font-size:14px;color:var(--gold)}
+.utt.live .en{color:var(--sea)}
+.micwrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:4px 0}
+.mic{appearance:none;border:0;width:88px;height:88px;border-radius:50%;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 10px 30px rgba(255,111,145,.4);touch-action:none;-webkit-user-select:none;user-select:none}
+.mic svg{width:38px;height:38px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mic.on{background:linear-gradient(135deg,var(--sea),#2BB3FF);animation:ring 1.2s infinite}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(79,227,209,.55)}100%{box-shadow:0 0 0 26px rgba(79,227,209,0)}}
+.status{font-size:13px;color:var(--muted);min-height:1.3em;text-align:center}
+.status.err{color:var(--danger)}
+
+/* Say */
+.btn{appearance:none;border:0;border-radius:16px;background:var(--grad);color:#fff;font:800 17px var(--display);padding:15px 16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(255,111,145,.3)}
+.btn.ghost{background:var(--panel);border:1px solid var(--line);color:var(--fg);font-weight:700;font-size:14px;padding:10px 14px;box-shadow:none}
+.btn:disabled{opacity:.5;cursor:default}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip2{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-size:13px;font-weight:600;padding:7px 11px;border-radius:999px;cursor:pointer}
+.out{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.out .zh{font-family:var(--cjk);font-size:clamp(28px,9vw,44px);line-height:1.3;word-break:break-word}
+.out .py{color:var(--gold);font-size:17px}
+.out:empty{display:none}
+
+/* Packs modal */
+.modal{position:absolute;inset:0;background:rgba(5,6,24,.6);backdrop-filter:blur(4px);display:none;align-items:flex-end;z-index:20}
+.modal.on{display:flex}
+.card{background:linear-gradient(180deg,#232657,#15173F);border:1px solid var(--line);border-radius:22px 22px 0 0;width:100%;max-height:88%;overflow:auto;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px}
+.card h2{font:800 21px var(--display);margin:0}
+.pack{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.pack:last-of-type{border-bottom:0}
+.pack .n{font-weight:700}
+.pack .d{font-size:13px;color:var(--muted);grid-column:1}
+.pack .bar{grid-column:1/-1;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+.pack .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--sea),var(--gold));transition:width .3s}
+.pack .st{font-size:13px;font-weight:800;color:var(--muted);white-space:nowrap}
+.pack .st.ok{color:var(--ok)}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.toast{position:absolute;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#2A2D66;border:1px solid var(--line);padding:9px 14px;border-radius:14px;font-size:14px;display:none;z-index:30;max-width:90%}
+.toast.on{display:block}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">Traveslation</div>
+    <button class="pill" id="packsBtn" aria-label="Language packs"><span class="dot"></span><span id="packsLabel">Packs</span></button>
+  </div>
+
+  <div class="strip" id="strip"><b id="stripLabel">Setting up</b><span class="bar"><i id="stripBar"></i></span><span id="stripPct">0%</span></div>
+
+  <main>
+    <!-- CAMERA -->
+    <section class="view on" id="v-camera">
+      <div class="stage">
+        <video id="video" playsinline muted autoplay></video>
+        <canvas class="overlay" id="overlay"></canvas>
+        <div class="topbar">
+          <select class="lang" id="camLang" aria-label="Language to read"></select>
+          <div class="chip" id="camChip">Point at any text</div>
+        </div>
+        <div class="ctl">
+          <button class="rbtn" id="flipBtn" aria-label="Switch camera"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9 13a3 3 0 0 0 5.5 1.6M15 13a3 3 0 0 0-5.5-1.6"/></svg></button>
+          <button class="rbtn" id="freezeBtn" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+        </div>
+      </div>
+      <div class="sheet" id="camSheet"></div>
+    </section>
+
+    <!-- LISTEN -->
+    <section class="view" id="v-listen">
+      <div class="col">
+        <div class="row" style="justify-content:space-between">
+          <div class="seg" id="listenMode">
+            <button data-m="live" class="on">Live</button>
+            <button data-m="offline">Offline</button>
+          </div>
+          <select class="lang" id="spokenLang" style="flex:1" aria-label="Language being spoken"></select>
+        </div>
+        <div class="transcript" id="transcript"><div class="empty">Hold the button and let them talk. Their words show here with the English under them.</div></div>
+        <div class="micwrap">
+          <button class="mic" id="micBtn" aria-label="Hold to listen"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+          <div class="status" id="listenStatus">Hold to listen, or tap once to keep listening</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SAY -->
+    <section class="view" id="v-say">
+      <div class="col">
+        <div class="row" style="justify-content:space-between">
+          <span class="lbl">Say it in</span>
+          <select class="lang" id="sayLang" style="flex:1" aria-label="Language to speak"></select>
+        </div>
+        <div class="chips" id="phrases">
+          <button class="chip2">Where is the bathroom?</button>
+          <button class="chip2">How much is this?</button>
+          <button class="chip2">I don't eat pork</button>
+          <button class="chip2">Please take me to this address</button>
+          <button class="chip2">Can I pay by card?</button>
+          <button class="chip2">I need a doctor</button>
+        </div>
+        <textarea id="sayText" placeholder="Type what you want to say, in English"></textarea>
+        <button class="btn" id="sayBtn">Translate</button>
+        <div class="out" id="sayOut"></div>
+        <div class="row" id="sayActions" hidden>
+          <button class="btn ghost" id="speakBtn">Play out loud</button>
+          <button class="btn ghost" id="bigBtn">Show full screen</button>
+        </div>
+        <div class="status" id="sayStatus"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="nav" aria-label="Mode">
+    <button class="on" data-v="camera"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Camera</button>
+    <button data-v="listen"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Listen</button>
+    <button data-v="say"><svg viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4z"/></svg>Say it</button>
+  </nav>
+
+  <div class="modal" id="packsModal">
+    <div class="card">
+      <h2>Language packs</h2>
+      <p class="hint">Download once on WiFi. After that the app reads, listens and translates with no connection. Keep it on your home screen so your phone keeps the packs.</p>
+      <div id="packList"></div>
+      <button class="btn" id="dlAll">Download everything</button>
+      <button class="btn ghost" id="closePacks">Close</button>
+      <p class="hint" id="installHint"></p>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+<div id="fullscreenText" style="position:fixed;inset:0;background:#fff;color:#000;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:var(--cjk);font-size:clamp(40px,12vw,96px);line-height:1.25;z-index:50;word-break:break-word"></div>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.26.0/dist/index.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
