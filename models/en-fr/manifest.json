@@ -1,0 +1,35 @@
+{
+ "pair": "en-fr",
+ "architecture": "base-memory",
+ "source": "retrain_hr_NLIxDbE1TBGyOTI-zwZagw",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enfr.s2t.bin.gz",
+   "size": 2297334,
+   "sha256": "055987f0b585b61c4914fb4469e2392fda0b25d3f7784275974f920e7b631997",
+   "parts": [
+    "lex.50.50.enfr.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enfr.intgemm.alphas.bin.gz",
+   "size": 23045432,
+   "sha256": "22cdaf3dc9a1da6e5818b5576737182467f3cd97e6fd6f94e4273eb7b56d1e3f",
+   "parts": [
+    "model.enfr.intgemm.alphas.bin.gz.part00",
+    "model.enfr.intgemm.alphas.bin.gz.part01",
+    "model.enfr.intgemm.alphas.bin.gz.part02",
+    "model.enfr.intgemm.alphas.bin.gz.part03",
+    "model.enfr.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.enfr.spm.gz",
+   "size": 409706,
+   "sha256": "5dcadaad8191fb4eb7677bce07098a20221dec95976a4db796f3a17cc82b4541",
+   "parts": [
+    "vocab.enfr.spm.gz.part00"
+   ]
+  }
+ }
+}
