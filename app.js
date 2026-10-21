@@ -1,4 +1,4 @@
-/* Traveslation. Everything runs on the phone: OCR (Tesseract), translation (Bergamot), offline speech (Whisper). */
+/* Traveslator. Everything runs on the phone: OCR (Tesseract), translation (Bergamot), offline speech (Whisper). */
 (() => {
 "use strict";
 const $ = id => document.getElementById(id);

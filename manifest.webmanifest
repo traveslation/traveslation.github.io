@@ -1,6 +1,6 @@
 {
-  "name": "Traveslation",
-  "short_name": "Traveslation",
+  "name": "Traveslator",
+  "short_name": "Traveslator",
   "description": "Point your camera, understand the menu, order, and talk with staff. Works without a connection.",
   "start_url": "./index.html",
   "scope": "./",

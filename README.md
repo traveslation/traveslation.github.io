@@ -1,8 +1,8 @@
-# Traveslation
+# Traveslator
 
 A travel translator that runs entirely on the phone. Point the camera at a menu or sign and English appears over the original text, live. Tap a dish to understand it and add it to an order. Talk with staff in both directions. Everything works in airplane mode once the language pack is on the phone.
 
-Live at https://traveslation.github.io
+Live at https://traveslator.github.io
 
 ## What runs where
 
