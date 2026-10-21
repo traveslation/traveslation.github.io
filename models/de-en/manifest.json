@@ -1,0 +1,35 @@
+{
+ "pair": "de-en",
+ "architecture": "base-memory",
+ "source": "retrain_hr2_WZOW24i4QJmIib61LeHfwg",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.deen.s2t.bin.gz",
+   "size": 2626658,
+   "sha256": "231e9caf62e0e867775d5f4c1f4cfae21e37c70d9bf2bd628fa468aeeb2ba869",
+   "parts": [
+    "lex.50.50.deen.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.deen.intgemm.alphas.bin.gz",
+   "size": 22403755,
+   "sha256": "38b245bcfc23f6d61fd98a187436ea1320a38f41896df411b103df3e83f51681",
+   "parts": [
+    "model.deen.intgemm.alphas.bin.gz.part00",
+    "model.deen.intgemm.alphas.bin.gz.part01",
+    "model.deen.intgemm.alphas.bin.gz.part02",
+    "model.deen.intgemm.alphas.bin.gz.part03",
+    "model.deen.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.deen.spm.gz",
+   "size": 413879,
+   "sha256": "88dcd7fdbf20dc60837ce837244d0d55b20f7079f2cbd2ba8e63530632028310",
+   "parts": [
+    "vocab.deen.spm.gz.part00"
+   ]
+  }
+ }
+}
