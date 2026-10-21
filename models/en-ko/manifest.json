@@ -1,0 +1,46 @@
+{
+ "pair": "en-ko",
+ "architecture": "base-memory",
+ "source": "cjk_retrain_base-memory_GP50C3MpQ9apCWZOW-f3PA",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enko.s2t.bin.gz",
+   "size": 3471311,
+   "sha256": "062ceb1b1173f81c5ece40fb45affb5b7cbd8eaaf295e5744647d0e94b04beef",
+   "parts": [
+    "lex.50.50.enko.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enko.intgemm.alphas.bin.gz",
+   "size": 33738001,
+   "sha256": "91ebb959edc11b6ff63d28b5e237106047673e5be2dfec99169352fd98f0f1be",
+   "parts": [
+    "model.enko.intgemm.alphas.bin.gz.part00",
+    "model.enko.intgemm.alphas.bin.gz.part01",
+    "model.enko.intgemm.alphas.bin.gz.part02",
+    "model.enko.intgemm.alphas.bin.gz.part03",
+    "model.enko.intgemm.alphas.bin.gz.part04",
+    "model.enko.intgemm.alphas.bin.gz.part05",
+    "model.enko.intgemm.alphas.bin.gz.part06",
+    "model.enko.intgemm.alphas.bin.gz.part07"
+   ]
+  },
+  "srcVocab": {
+   "name": "srcvocab.enko.spm.gz",
+   "size": 402480,
+   "sha256": "2227e5841e4376a3de47010a22f77762d9259c7459959744f2505721b93134a3",
+   "parts": [
+    "srcvocab.enko.spm.gz.part00"
+   ]
+  },
+  "trgVocab": {
+   "name": "trgvocab.enko.spm.gz",
+   "size": 412614,
+   "sha256": "676f821c4e0bab2f6b5af0e38fffdb7c053ad74ffa5a3e822e55fd2370af4008",
+   "parts": [
+    "trgvocab.enko.spm.gz.part00"
+   ]
+  }
+ }
+}
