@@ -1,0 +1,35 @@
+{
+ "pair": "en-ru",
+ "architecture": "base-memory",
+ "source": "retrain_base-memory_KJ23-iDVTcymG1ZldWY17w",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enru.s2t.bin.gz",
+   "size": 1378563,
+   "sha256": "9c111984d8207f8dc6b9dd5c17ab4d18042f7c0e34105a09a35909538facc958",
+   "parts": [
+    "lex.50.50.enru.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enru.intgemm.alphas.bin.gz",
+   "size": 21988864,
+   "sha256": "e766bc83434f4a9ff4110abe5450043a62cd402c6a7a8bca5e3e4d83b408dcb4",
+   "parts": [
+    "model.enru.intgemm.alphas.bin.gz.part00",
+    "model.enru.intgemm.alphas.bin.gz.part01",
+    "model.enru.intgemm.alphas.bin.gz.part02",
+    "model.enru.intgemm.alphas.bin.gz.part03",
+    "model.enru.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.enru.spm.gz",
+   "size": 419005,
+   "sha256": "9aa498dce5d27c02ac998c646c51a7475a421500ecdbbd1dff9ff3e77e64b21c",
+   "parts": [
+    "vocab.enru.spm.gz.part00"
+   ]
+  }
+ }
+}
