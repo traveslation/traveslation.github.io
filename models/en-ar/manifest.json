@@ -1,0 +1,35 @@
+{
+ "pair": "en-ar",
+ "architecture": "base-memory",
+ "source": "retrain_base-memory_G3CmhwG_TZext3cys-udHg",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enar.s2t.bin.gz",
+   "size": 1639219,
+   "sha256": "b7466406d7f5e0c493bc65dc7de221aa3e6cd7f95c6fc7dd1e73759520c937ac",
+   "parts": [
+    "lex.50.50.enar.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enar.intgemm.alphas.bin.gz",
+   "size": 22857819,
+   "sha256": "88e85e33403cda6b1a529f32dc30c0977a4234285d6f8340e0d630da21b176e5",
+   "parts": [
+    "model.enar.intgemm.alphas.bin.gz.part00",
+    "model.enar.intgemm.alphas.bin.gz.part01",
+    "model.enar.intgemm.alphas.bin.gz.part02",
+    "model.enar.intgemm.alphas.bin.gz.part03",
+    "model.enar.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.enar.spm.gz",
+   "size": 418930,
+   "sha256": "3a4b9e81c0f73ef8ed02c254b3ae99d64f8265afa54a6b838a0870bb4f9d0369",
+   "parts": [
+    "vocab.enar.spm.gz.part00"
+   ]
+  }
+ }
+}
