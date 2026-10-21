@@ -171,6 +171,17 @@ function glossaryLookup(text) {
   return null;
 }
 async function toEnglish(texts) {
+  if (L().cjk) {
+    // split "出口 EXIT" into the CJK part and the Latin part; translate the CJK, keep the Latin unless it says the same thing
+    const parts = texts.map(t => { const cjk = (t.match(/[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af][\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\s，、。！？：]*/g) || []).join(" ").trim(); const latin = t.replace(/[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af，、。！？：]+/g, " ").replace(/\s+/g, " ").trim(); return { cjk, latin }; });
+    if (parts.some(p => p.cjk && p.latin)) {
+      const en = await toEnglishPlain(parts.map((p, i) => p.cjk || texts[i]));
+      return parts.map((p, i) => { if (!p.cjk || !p.latin) return en[i]; const e = en[i].replace(/[.。]$/, ""); return e.toLowerCase() === p.latin.toLowerCase() ? e : e + " · " + p.latin; });
+    }
+  }
+  return toEnglishPlain(texts);
+}
+async function toEnglishPlain(texts) {
   const out = texts.map(t => transCache.get(t) ?? null), need = [];
   texts.forEach((t, i) => { if (out[i] == null) { const g = glossaryLookup(t); if (g) { out[i] = g.en; transCache.set(t, g.en); } else need.push(i); } });
   if (need.length) {
@@ -273,7 +284,9 @@ function matchRegions(lines) {
     });
     if (best != null) {
       const ln = lines[best]; used.add(best);
-      const k = 0.55; r.box = { x: r.box.x + (ln.box.x - r.box.x) * k, y: r.box.y + (ln.box.y - r.box.y) * k, w: r.box.w + (ln.box.w - r.box.w) * k, h: r.box.h + (ln.box.h - r.box.h) * k };
+      const dx = ln.box.x - r.box.x, dy = ln.box.y - r.box.y, dw = ln.box.w - r.box.w, dh = ln.box.h - r.box.h;
+      const big = Math.abs(dx) > 0.03 || Math.abs(dy) > 0.03; const k = big ? 0.7 : (Math.abs(dx) + Math.abs(dy) + Math.abs(dw) + Math.abs(dh) < 0.012 ? 0 : 0.35);
+      if (k) r.box = { x: r.box.x + dx * k, y: r.box.y + dy * k, w: r.box.w + dw * k, h: r.box.h + dh * k };
       r.seen++; r.miss = 0; r.lastSeen = now;
       if (ln.text !== r.text && ln.conf > r.conf + 6 && !r.edited) { r.text = ln.text; r.conf = ln.conf; r.en = null; r.pending = true; r.meta = null; }
       else if (ln.conf > r.conf) r.conf = ln.conf;
@@ -303,7 +316,7 @@ function estimateMotion() {
       for (let y = R; y < TH - R; y += 1) for (let x = R; x < TW - R; x += 1) { const i = ((y * TW) + x) * 4, j = (((y + dy) * TW) + (x + dx)) * 4; sad += Math.abs(cur[i] - prevThumb[j]); n++; }
       sad /= n; if (dx === 0 && dy === 0) zero = sad; if (sad < best.sad) best = { dx, dy, sad };
     }
-    if ((best.dx || best.dy) && best.sad < zero * 0.8) { const mx = best.dx / TW, my = best.dy / TH; motionAcc.x += mx; motionAcc.y += my; regions.forEach(r => { r.box.x += mx; r.box.y += my; }); }
+    if ((best.dx || best.dy) && best.sad < zero * 0.7 && (Math.abs(best.dx) + Math.abs(best.dy)) >= 1) { const mx = best.dx / TW, my = best.dy / TH; motionAcc.x += mx; motionAcc.y += my; regions.forEach(r => { r.box.x += mx; r.box.y += my; }); }
   }
   prevThumb = cur;
 }
@@ -350,23 +363,23 @@ function drawCard(ctx, b, rg, dpr, W) {
   ctx.globalAlpha = 1;
   return { x, y, w: cw, h: ch };
 }
-/* Text mode: a flat label that replaces the original text in place. */
+/* Text mode: the English sits right under the original line, matched to its size, no box. */
 function drawLabel(ctx, b, rg, dpr, W) {
   const title = rg.en || ""; if (!title) return null;
-  const padX = 6 * dpr, padY = 3 * dpr, font = getComputedStyle(document.body).getPropertyValue("--display");
-  let fs = Math.max(11 * dpr, Math.min(26 * dpr, b.h * 0.72));
+  const font = getComputedStyle(document.body).getPropertyValue("--display");
+  let fs = Math.max(12 * dpr, Math.min(30 * dpr, b.h * 0.85));
   ctx.font = `600 ${fs}px ${font}`; let tw = ctx.measureText(title).width;
-  const maxW = W - 2 * padX;
-  while (tw + 2 * padX > Math.max(b.w * 1.6, 120 * dpr) && fs > 10 * dpr) { fs -= dpr; ctx.font = `600 ${fs}px ${font}`; tw = ctx.measureText(title).width; }
-  const cw = Math.min(maxW, Math.max(b.w, tw + 2 * padX)), ch = Math.max(b.h, fs * 1.2 + 2 * padY);
-  let x = b.x + b.w / 2 - cw / 2, y = b.y + b.h / 2 - ch / 2; x = Math.max(padX, Math.min(x, W - cw - padX));
-  ctx.globalAlpha = rg.alpha * 0.97;
-  ctx.shadowColor = "rgba(0,0,0,.12)"; ctx.shadowBlur = 6 * dpr; ctx.shadowOffsetY = 1 * dpr;
-  ctx.fillStyle = "#FBF9F2"; roundRect(ctx, x, y, cw, ch, 6 * dpr); ctx.fill(); ctx.shadowColor = "transparent";
-  ctx.fillStyle = "#14201B"; ctx.textBaseline = "middle"; ctx.textAlign = "center";
-  ctx.fillText(title, x + cw / 2, y + ch / 2, cw - 2 * padX); ctx.textAlign = "left"; ctx.textBaseline = "top";
+  const maxW = Math.min(W - 16 * dpr, Math.max(b.w * 1.6, 160 * dpr));
+  while (tw > maxW && fs > 10 * dpr) { fs -= dpr; ctx.font = `600 ${fs}px ${font}`; tw = ctx.measureText(title).width; }
+  let x = b.x; if (x + tw > W - 8 * dpr) x = Math.max(8 * dpr, W - 8 * dpr - tw);
+  const y = b.y + b.h + 2 * dpr;
+  ctx.globalAlpha = rg.alpha;
+  ctx.textBaseline = "top"; ctx.textAlign = "left";
+  ctx.lineJoin = "round"; ctx.lineWidth = Math.max(1.5 * dpr, fs * 0.09); ctx.strokeStyle = "rgba(10,18,14,.7)";
+  ctx.strokeText(title, x, y, maxW);
+  ctx.fillStyle = "#FFFFFF"; ctx.fillText(title, x, y, maxW);
   ctx.globalAlpha = 1;
-  return { x, y, w: cw, h: ch };
+  return { x: Math.min(x, b.x), y: b.y, w: Math.max(tw, b.w), h: b.h + fs * 1.25 + 2 * dpr };
 }
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 overlay.addEventListener("pointerdown", e => {
@@ -404,7 +417,7 @@ function openRegion(rg) {
       $("qMinus").onclick = () => { q = Math.max(1, q - 1); qv.textContent = q; };
       $("qPlus").onclick = () => { q++; qv.textContent = q; };
       $("addOrder").onclick = () => { addToOrder({ zh: orig, en: rg.en, price: rg.price ? rg.price.value : null, priceCertain: !!(rg.price && rg.price.certain), unit: rg.price ? rg.price.unit : "", qty: q }); closeSheet(); toast("Added to your order"); };
-      $("askIngr").onclick = () => { closeSheet(); goConversation("restaurant", [["What is in " + rg.en + "?", null, orig], ["Does this contain nuts?", null], ["Is this dish spicy?", "这道菜辣吗？"]]); };
+      $("askIngr").onclick = () => { closeSheet(); goConversation("restaurant", [["What is in " + rg.en + "?", null, orig], ["Does this contain nuts?", null], ["Is this dish spicy?", L().glossary ? "这道菜辣吗？" : null]]); };
     } else {
       $("askThis").onclick = () => { closeSheet(); goConversation(null, [["What does this mean: " + rg.en + "?", null, orig]]); };
       $("savePhrase").onclick = () => { saveItem("phrases", { en: rg.en, zh: orig }); toast("Saved to Phrases"); };
@@ -422,7 +435,7 @@ $("askBtn").onclick = () => {
   openSheet(`<div class="eyebrow">Ask about what's in view</div><h2>Numbered, so you can point.</h2>
     ${items.length ? `<div class="list">${items.map((r, i) => `<div class="item"><div class="n"><div><b>${i + 1}.</b> ${esc(r.en)}</div><div class="cjk">${esc(r.srcName || r.text)}</div></div><button data-i="${i}">Ask</button></div>`).join("")}</div>` : `<div class="empty">Nothing readable in view yet. Point at the text and try again.</div>`}
     <p class="sub">Each item is a label as read. The app doesn't see what a button or control does; ask staff when it matters.</p>`, () => {
-    sheet.querySelectorAll(".item button").forEach(b => b.onclick = () => { const r = items[+b.dataset.i]; closeSheet(); goConversation(null, [["What does this mean: " + r.en + "?", null, r.srcName || r.text], ["Which one is the entrance?", "哪一个是入口？"], ["Is this price per person?", "这个价格是每人的吗？"]]); });
+    sheet.querySelectorAll(".item button").forEach(b => b.onclick = () => { const r = items[+b.dataset.i]; closeSheet(); goConversation(null, [["What does this mean: " + r.en + "?", null, r.srcName || r.text], ["Which one is the entrance?", L().glossary ? "哪一个是入口？" : null], ["Is this price per person?", L().glossary ? "这个价格是每人的吗？" : null]]); });
   });
 };
 
@@ -456,7 +469,7 @@ function showOrderCard() {
   openSheet(`<div class="eyebrow">Order card · 点菜单</div>
     <div class="bigcard"><div class="zh">${order.map(o => `${esc(o.zh)} <span style="color:var(--green)">× ${o.qty}</span>${o.mods ? `<div style="font-size:60%;color:var(--muted)">${esc(o.mods)}</div>` : ""}`).join("<br>")}</div><div class="en">${order.map(o => `${esc(o.en)} × ${o.qty}`).join(" · ")}</div></div>
     <p class="sub">Hand the phone over. Prices are as read from the menu; staff confirm the total.</p>
-    <button class="btn ghost" id="speakOrder">Play it out loud</button>`, () => { $("speakOrder").onclick = () => speak(order.map(o => `${o.zh}，${numZh(o.qty)}份`).join("。")); });
+    <button class="btn ghost" id="speakOrder">Play it out loud</button>`, () => { $("speakOrder").onclick = () => speak(L().glossary ? order.map(o => `${o.zh}，${numZh(o.qty)}份`).join("。") : order.map(o => `${o.zh} × ${o.qty}`).join(". ")); });
 }
 const numZh = n => ["零", "一", "两", "三", "四", "五", "六", "七", "八", "九", "十"][n] || String(n);
 $("orderView").onclick = openOrder;
@@ -478,14 +491,14 @@ function renderSuggestions() {
   const box = $("sugg"); const list = [];
   if (pinned) list.push(...pinned);
   else {
-    if (scenario === "restaurant" && order.length) list.push(["I'd like to order: " + order.map(o => `${o.en} × ${o.qty}`).join(", ") + ".", "我想点：" + orderCardText().replace(/\n/g, "，") + "。"]);
+    if (scenario === "restaurant" && order.length) list.push(["I'd like to order: " + order.map(o => `${o.en} × ${o.qty}`).join(", ") + ".", L().glossary ? "我想点：" + orderCardText().replace(/\n/g, "，") + "。" : null, L().glossary ? null : orderCardText().replace(/\n/g, ", ")]);
     const last = [...turns].reverse().find(t => t.who === "them");
     if (last && /米饭|rice/i.test(last.src + " " + last.tr)) list.push(["Yes, two bowls of rice, please.", "好的，请来两碗米饭。"]);
     if (last && /辣|spicy/i.test(last.src + " " + last.tr)) list.push(["A little spicy is fine.", "微辣就可以。"]);
     (G.phrases[scenario] || []).slice(0, 6).forEach(p => { if (list.length < 3 && !list.find(x => x[0] === p[0])) list.push(p); });
   }
   box.innerHTML = list.slice(0, 3).map((p, i) => `<button data-i="${i}"><svg viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4z"/></svg><span>${esc(p[0])}</span></button>`).join("");
-  box.querySelectorAll("button").forEach(b => b.onclick = () => sayEnglish(list[+b.dataset.i][0], list[+b.dataset.i][1], list[+b.dataset.i][2]));
+  box.querySelectorAll("button").forEach(b => b.onclick = () => { const p = list[+b.dataset.i]; sayEnglish(p[0], L().glossary ? p[1] : null, p[2]); });
 }
 function addTurn(t) { turns.push(t); renderTurns(); return t; }
 function renderTurns() {
@@ -498,7 +511,7 @@ function renderTurns() {
   box.querySelectorAll(".turn .acts button").forEach(b => b.onclick = () => { const t = turns[+b.closest(".turn").dataset.i]; const a = b.dataset.a;
     if (a === "play") speak(t.who === "me" ? t.tr : t.src);
     if (a === "edit") editTurn(t);
-    if (a === "repeat") sayEnglish("Please repeat slowly.", "请慢一点再说一遍。");
+    if (a === "repeat") sayEnglish("Please repeat slowly.", L().glossary ? "请慢一点再说一遍。" : null);
     if (a === "save") { saveItem("phrases", { en: t.src, zh: t.tr }); toast("Saved to Phrases"); }
   });
   $("convCol").scrollTop = $("convCol").scrollHeight;
@@ -512,7 +525,7 @@ function editTurn(t) {
 async function sayEnglish(text, zhKnown, extraZh) {
   const t = addTurn({ who: "me", src: text, tr: zhKnown || "", live: !zhKnown });
   if (!zhKnown) { try { t.tr = await fromEnglish(text); } catch (e) { t.tr = "(translation unavailable offline)"; } }
-  if (extraZh && !t.tr.includes(extraZh)) t.tr = t.tr.replace(/[?？。]$/, "") + "：" + extraZh;
+  if (extraZh && !t.tr.includes(extraZh)) t.tr = t.tr.replace(/[?？。.]$/, "") + (L().cjk ? "：" : ": ") + extraZh;
   t.live = false; renderTurns(); speak(t.tr); pinned = null; renderSuggestions();
 }
 $("typedSend").onclick = () => { const v = $("typedText").value.trim(); if (!v) return; $("typedText").value = ""; sayEnglish(v); };
@@ -582,12 +595,12 @@ $("confirmBtn").onclick = () => {
     <p class="sub">States: ${order.length ? "order items are <b>proposed</b> until staff confirm" : ""}${prices.length ? " · mentioned prices are <b>mentioned</b>, not agreed" : ""}. Silence isn't a yes.</p>
     <button class="btn" id="askTotal">Ask: Is that the total price?</button>
     <button class="btn ghost" id="markOk">Staff confirmed · 已确认</button>`, () => {
-    $("askTotal").onclick = () => { closeSheet(); sayEnglish("Is that the total price?", "这是总价吗？"); };
+    $("askTotal").onclick = () => { closeSheet(); sayEnglish("Is that the total price?", L().glossary ? "这是总价吗？" : null); };
     $("markOk").onclick = () => { order.forEach(o => o.confirmed = true); saveOrder(); closeSheet(); toast("Marked as confirmed by staff"); };
   });
 };
 $("rescueBtn").onclick = () => {
-  shortTurns = true; stopRecog(); const r = G.phrases.reset; addTurn({ who: "me", src: r[0], tr: r[1] }); speak(r[1]);
+  shortTurns = true; stopRecog(); const r = G.phrases.reset; sayEnglish(r[0], L().glossary ? r[1] : null);
   pinned = G.phrases.clarify.slice(0, 3); renderSuggestions(); $("convStatus").textContent = "Short turns on: one sentence at a time. Type numbers and names when you can.";
 };
 
