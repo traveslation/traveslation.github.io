@@ -1,0 +1,46 @@
+{
+ "pair": "en-zh_hant",
+ "architecture": "base-memory",
+ "source": "zh_hant_llmaat_finetune10M_qe8_f2_aQ8azdOMQOSBVjBDOVDIZQ",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enzh_hant.s2t.bin.gz",
+   "size": 2290215,
+   "sha256": "b254c97043a9ba5ff2791abac8b411dc024de6257576745a522ccc6c92421870",
+   "parts": [
+    "lex.50.50.enzh_hant.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enzh_hant.intgemm.alphas.bin.gz",
+   "size": 33291007,
+   "sha256": "79cb710e5e66bb0490368bf158f42aff800a0f9ef2f6449d98dfb654f2d02669",
+   "parts": [
+    "model.enzh_hant.intgemm.alphas.bin.gz.part00",
+    "model.enzh_hant.intgemm.alphas.bin.gz.part01",
+    "model.enzh_hant.intgemm.alphas.bin.gz.part02",
+    "model.enzh_hant.intgemm.alphas.bin.gz.part03",
+    "model.enzh_hant.intgemm.alphas.bin.gz.part04",
+    "model.enzh_hant.intgemm.alphas.bin.gz.part05",
+    "model.enzh_hant.intgemm.alphas.bin.gz.part06",
+    "model.enzh_hant.intgemm.alphas.bin.gz.part07"
+   ]
+  },
+  "srcVocab": {
+   "name": "srcvocab.enzh_hant.spm.gz",
+   "size": 404976,
+   "sha256": "5ad55cf62d3e8b0a1cefacc0086b1ceb26d0df6415205714effa76bbb1a3063b",
+   "parts": [
+    "srcvocab.enzh_hant.spm.gz.part00"
+   ]
+  },
+  "trgVocab": {
+   "name": "trgvocab.enzh_hant.spm.gz",
+   "size": 416659,
+   "sha256": "324622c18601da5784569eeda74b77e5ae96b164657eb8029a9dabfdcd29803b",
+   "parts": [
+    "trgvocab.enzh_hant.spm.gz.part00"
+   ]
+  }
+ }
+}
