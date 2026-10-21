@@ -1,0 +1,33 @@
+{
+ "pair": "tr-en",
+ "architecture": "tiny",
+ "source": "statmt_xxxxxxxxRxSxxxxxxxxxxA",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.tren.s2t.bin.gz",
+   "size": 2470683,
+   "sha256": "e06304247fc4dfd55fcab21bfc9656a28f81fcf8efb2ccb0a5796b296bfeac1b",
+   "parts": [
+    "lex.50.50.tren.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.tren.intgemm.alphas.bin.gz",
+   "size": 12362908,
+   "sha256": "0939c2d12325a2f80a92d3c3ddaf718510837d03ee59303aa963b179368ec68a",
+   "parts": [
+    "model.tren.intgemm.alphas.bin.gz.part00",
+    "model.tren.intgemm.alphas.bin.gz.part01",
+    "model.tren.intgemm.alphas.bin.gz.part02"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.tren.spm.gz",
+   "size": 409060,
+   "sha256": "dfa22c3d15a6bdfb7765edc9e42c77daff8597a9ebe088fe886094ff0baeaef1",
+   "parts": [
+    "vocab.tren.spm.gz.part00"
+   ]
+  }
+ }
+}
