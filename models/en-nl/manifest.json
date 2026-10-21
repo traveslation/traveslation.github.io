@@ -1,0 +1,35 @@
+{
+ "pair": "en-nl",
+ "architecture": "base-memory",
+ "source": "retrain_hr_fix_names_fR8XhBiBQniIbi4I_ebJ2Q",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.ennl.s2t.bin.gz",
+   "size": 2155034,
+   "sha256": "b95c612e69270142c352589b4082b936810ec02ab7842c2a573bab6441709d06",
+   "parts": [
+    "lex.50.50.ennl.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.ennl.intgemm.alphas.bin.gz",
+   "size": 23386633,
+   "sha256": "a1ab24477ca1289e123e9a2817434f99b47b9b5e461ec65ad273f3dd394814a2",
+   "parts": [
+    "model.ennl.intgemm.alphas.bin.gz.part00",
+    "model.ennl.intgemm.alphas.bin.gz.part01",
+    "model.ennl.intgemm.alphas.bin.gz.part02",
+    "model.ennl.intgemm.alphas.bin.gz.part03",
+    "model.ennl.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.ennl.spm.gz",
+   "size": 410222,
+   "sha256": "0b12be4ccd0ee5182ad7e8ecd3254eece806ae183bece90fa625ceae7c851f80",
+   "parts": [
+    "vocab.ennl.spm.gz.part00"
+   ]
+  }
+ }
+}
