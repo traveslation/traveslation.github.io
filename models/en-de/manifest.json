@@ -1,0 +1,35 @@
+{
+ "pair": "en-de",
+ "architecture": "base-memory",
+ "source": "retrain_hr_fix_names_SCgGhxUPQ2WAECHLRtzrMg",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.ende.s2t.bin.gz",
+   "size": 2314750,
+   "sha256": "0370d79cda6fed5dfa8f9b2a0009459bd2766893825bb5b8b5114169d18da6c4",
+   "parts": [
+    "lex.50.50.ende.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.ende.intgemm.alphas.bin.gz",
+   "size": 22992073,
+   "sha256": "e3a74458faba3ab2752ed8355c5e3979f13395279c8fc1bd3f54a3c2316e4975",
+   "parts": [
+    "model.ende.intgemm.alphas.bin.gz.part00",
+    "model.ende.intgemm.alphas.bin.gz.part01",
+    "model.ende.intgemm.alphas.bin.gz.part02",
+    "model.ende.intgemm.alphas.bin.gz.part03",
+    "model.ende.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.ende.spm.gz",
+   "size": 413879,
+   "sha256": "3b2ddbfac73f994f151a8994447d6b3d41ab0d3435da56f79c233f34d03e45c2",
+   "parts": [
+    "vocab.ende.spm.gz.part00"
+   ]
+  }
+ }
+}
