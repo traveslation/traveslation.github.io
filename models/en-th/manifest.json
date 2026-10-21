@@ -1,0 +1,35 @@
+{
+ "pair": "en-th",
+ "architecture": "base-memory",
+ "source": "new-opuscleaner-en-th-onestage-topk10_WIvJuHhrSyiXLtJBJOUrsA",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enth.s2t.bin.gz",
+   "size": 1601933,
+   "sha256": "ae7b432685ed724d9f663e0b5b8fe834982597c679fb6f5afb2045d60cbd1d19",
+   "parts": [
+    "lex.50.50.enth.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enth.intgemm.alphas.bin.gz",
+   "size": 22976729,
+   "sha256": "8e736bcca5844f977ee1ee653167e17bbc73d94e50bad18108335dba0b8b9837",
+   "parts": [
+    "model.enth.intgemm.alphas.bin.gz.part00",
+    "model.enth.intgemm.alphas.bin.gz.part01",
+    "model.enth.intgemm.alphas.bin.gz.part02",
+    "model.enth.intgemm.alphas.bin.gz.part03",
+    "model.enth.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.enth.spm.gz",
+   "size": 450379,
+   "sha256": "afa8d8be186df4c9b4acb684d9473e2dfd9f33e4f12b862fcef8cec34d323ecd",
+   "parts": [
+    "vocab.enth.spm.gz.part00"
+   ]
+  }
+ }
+}
