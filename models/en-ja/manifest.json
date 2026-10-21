@@ -1,0 +1,46 @@
+{
+ "pair": "en-ja",
+ "architecture": "base-memory",
+ "source": "llmaat_finetune10M_qe8_f2_ApiGGQIwTKuF9i_k3n9Q2Q",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enja.s2t.bin.gz",
+   "size": 2341409,
+   "sha256": "7966382f7a9ba15993c67721526921d8901caa0f8add56eff04e4bb327d57c11",
+   "parts": [
+    "lex.50.50.enja.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enja.intgemm.alphas.bin.gz",
+   "size": 33052218,
+   "sha256": "99fc8fc120189930beadacb2eef4b049d0794ac6132d1266340e457c95730368",
+   "parts": [
+    "model.enja.intgemm.alphas.bin.gz.part00",
+    "model.enja.intgemm.alphas.bin.gz.part01",
+    "model.enja.intgemm.alphas.bin.gz.part02",
+    "model.enja.intgemm.alphas.bin.gz.part03",
+    "model.enja.intgemm.alphas.bin.gz.part04",
+    "model.enja.intgemm.alphas.bin.gz.part05",
+    "model.enja.intgemm.alphas.bin.gz.part06",
+    "model.enja.intgemm.alphas.bin.gz.part07"
+   ]
+  },
+  "srcVocab": {
+   "name": "srcvocab.enja.spm.gz",
+   "size": 404352,
+   "sha256": "12d8ffc83fc0bb61494d95701f6a298bbad5c999a043d4a48a1c1bd61e092167",
+   "parts": [
+    "srcvocab.enja.spm.gz.part00"
+   ]
+  },
+  "trgVocab": {
+   "name": "trgvocab.enja.spm.gz",
+   "size": 431278,
+   "sha256": "be7fec234b5fc94616276ee6cca69f3a8cbfa6762fdf278dfc6b11eaf669cc48",
+   "parts": [
+    "trgvocab.enja.spm.gz.part00"
+   ]
+  }
+ }
+}
