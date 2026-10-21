@@ -16,6 +16,10 @@ window.GLOSSARY = {
     "检票口": "Ticket gate", "候车室": "Waiting room", "站台": "Platform", "药店": "Pharmacy", "医院": "Hospital", "警察": "Police", "银行": "Bank", "超市": "Supermarket",
     "海滩": "Beach", "景区": "Scenic area", "门票": "Admission ticket", "成人": "Adult", "儿童": "Child", "老人": "Senior", "每人": "Per person", "每位": "Per person", "每份": "Per serving",
     "份": "serving", "位": "person", "元": "yuan", "斤": "jin (500 g)", "两": "liang (50 g)", "瓶": "bottle", "杯": "cup", "碗": "bowl", "例": "portion", "大": "Large", "中": "Medium", "小": "Small",
+    "肉类菜单": "Meat menu", "肉类": "Meat", "牛肉": "Beef", "猪肉": "Pork", "羊肉": "Lamb", "鸡肉": "Chicken", "鸭肉": "Duck", "鱼": "Fish", "虾": "Shrimp", "螃蟹": "Crab", "鱿鱼": "Squid", "贝类": "Shellfish",
+    "五花肉": "Pork belly", "猪肩肉": "Pork shoulder", "里脊": "Tenderloin", "排骨": "Ribs", "牛小排": "Beef short ribs", "牛排": "Steak", "牛腩": "Beef brisket", "牛舌": "Beef tongue", "鸡翅": "Chicken wings", "鸡腿": "Chicken leg", "鸡胸": "Chicken breast", "培根": "Bacon", "香肠": "Sausage", "火腿": "Ham",
+    "大酱汤": "Soybean paste stew", "泡菜": "Kimchi", "泡菜汤": "Kimchi stew", "豆腐": "Tofu", "青菜": "Greens", "土豆": "Potato", "茄子": "Eggplant", "蘑菇": "Mushroom", "鸡蛋": "Egg", "玉米": "Corn", "西兰花": "Broccoli", "菠菜": "Spinach", "白菜": "Cabbage", "黄瓜": "Cucumber", "番茄": "Tomato", "西红柿": "Tomato", "洋葱": "Onion", "大蒜": "Garlic", "辣椒": "Chili",
+    "汤": "Soup", "炒饭": "Fried rice", "炒面": "Fried noodles", "汤面": "Noodle soup", "拌面": "Noodles with sauce", "烧烤": "Barbecue", "烤肉": "Grilled meat", "火锅": "Hot pot", "小吃": "Snacks", "凉菜": "Cold dishes", "热菜": "Hot dishes",
     "WiFi密码": "WiFi password", "家常小馆": "Home-style eatery", "家常菜": "Home-style dishes", "小馆": "Eatery", "饭店": "Restaurant", "餐厅": "Restaurant", "小吃": "Snacks", "早餐": "Breakfast", "午餐": "Lunch", "晚餐": "Dinner", "套餐": "Set meal", "外卖": "Takeaway", "堂食": "Dine in", "无线密码": "WiFi password", "密码": "Password", "停车场": "Parking", "禁止停车": "No parking",
   },
   /* Dish glossary: key = Simplified Chinese name as commonly printed. prep = typical preparation (not a claim about this restaurant). listed = ingredients the NAME itself states. */

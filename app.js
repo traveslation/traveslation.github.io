@@ -165,6 +165,9 @@ function glossaryLookup(text) {
   const t = text.replace(/\s+/g, "");
   if (G.dishes[t]) return { en: G.dishes[t].en, dish: G.dishes[t], key: t };
   if (G.signs[t]) return { en: G.signs[t] };
+  // "五花肉 200g" → the CJK core plus whatever numbers, units or Latin were around it
+  const core = t.replace(/[^\u3400-\u9fff]/g, ""), rest = text.replace(/[\u3400-\u9fff，、。！？：]/g, " ").replace(/\s+/g, " ").trim();
+  if (core && core !== t) { const hit = G.dishes[core] ? { en: G.dishes[core].en, dish: G.dishes[core], key: core } : G.signs[core] ? { en: G.signs[core] } : null; if (hit) return { ...hit, en: rest ? hit.en + " · " + rest : hit.en }; }
   // longest dish key contained in the text (menus often add a size or a marker)
   let best = null; for (const k of Object.keys(G.dishes)) if (k.length >= 3 && t.includes(k) && (!best || k.length > best.length)) best = k;
   if (best) return { en: G.dishes[best].en, dish: G.dishes[best], key: best, partial: true };
@@ -208,7 +211,7 @@ function parsePrice(text) {
 const video = $("video"), overlay = $("overlay"), stage = $("stage"), hint = $("hint");
 let stream = null, frozen = false, camMode = store.get("camMode", "text"), ocrBusy = false, ocrTimer = null, raf = null;
 const regions = []; let regionSeq = 0; window.__regions = regions; window.__state = () => ({ ocr: !!ocrWorker, rs: video.readyState, busy: ocrBusy, res: { ...res }, stream: !!stream, timer: !!ocrTimer, view });
-const work = document.createElement("canvas"); const thumbA = document.createElement("canvas"), thumbB = document.createElement("canvas");
+const work = document.createElement("canvas"), colorWork = document.createElement("canvas"); const thumbA = document.createElement("canvas"), thumbB = document.createElement("canvas");
 const TW = 48, TH = 27; let prevThumb = null, motionAcc = { x: 0, y: 0 };
 function setHint(t, ms = 2000) { hint.textContent = t; hint.classList.toggle("on", !!t); clearTimeout(setHint.t); if (t && ms) setHint.t = setTimeout(() => hint.classList.remove("on"), ms); }
 async function startCamera() {
@@ -236,7 +239,7 @@ function textSim(a, b) {
   const ga = grams(a), gb = grams(b); let inter = 0; for (const [g, n] of ga) if (gb.has(g)) inter += Math.min(n, gb.get(g));
   return 2 * inter / ((la - 1) + (lb - 1));
 }
-const norm = s => s.replace(/\s+/g, " ").replace(/(?<=[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af])\s+(?=[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af¥￥\d])/g, "").trim();
+const norm = s => s.replace(/\s+/g, " ").replace(/\s*一\s*(?=[¥￥$€]?\s*\d)/g, " — ").replace(/\s*一\s*$/, "").replace(/(?<=[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af])\s+(?=[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af¥￥\d])/g, "").trim();
 async function scanFrame() {
   if (ocrBusy || frozen || !ocrWorker || video.readyState < 2 || document.hidden) return;
   ocrBusy = true;
@@ -245,6 +248,7 @@ async function scanFrame() {
     const scale = Math.min(1, 1100 / Math.max(vw, vh));
     work.width = Math.round(vw * scale); work.height = Math.round(vh * scale);
     const ctx = work.getContext("2d", { willReadFrequently: true });
+    colorWork.width = work.width; colorWork.height = work.height; colorWork.getContext("2d", { willReadFrequently: true }).drawImage(video, 0, 0, work.width, work.height);
     ctx.filter = "grayscale(1) contrast(1.2)"; ctx.drawImage(video, 0, 0, work.width, work.height);
     const myLang = lang, w = ocrWorker, motionBefore = { ...motionAcc };
     const { data } = await Promise.race([w.recognize(work), new Promise((_, rej) => setTimeout(() => rej(new Error("ocr timeout")), 9000))]);
@@ -271,6 +275,24 @@ function autoMenu() {
   if (dishy >= 2) { camMode = "menu"; store.set("camMode", "menu"); $("modeMenu").classList.add("on"); regions.forEach(r => { r.pending = true; }); setHint("Looks like a menu. Tap a dish to explore and order", 2600); }
 }
 function parsePriceAny(text) { return /(?:¥|￥|RMB|\$|€|£|₩|฿|₫|₹)\s*\d|\d+(?:[.,]\d{1,2})?\s*(?:元|块|yuan|RMB)/i.test(text); }
+/* Sample the sign's background and ink colours around a text box so the English can be painted the same way. */
+function sampleColors(box) {
+  try {
+    const c = colorWork.getContext("2d", { willReadFrequently: true });
+    const W = colorWork.width, H = colorWork.height;
+    const x0 = Math.max(0, Math.floor(box.x * W) - 4), y0 = Math.max(0, Math.floor(box.y * H) - 4);
+    const x1 = Math.min(W, Math.ceil((box.x + box.w) * W) + 4), y1 = Math.min(H, Math.ceil((box.y + box.h) * H) + 4);
+    if (x1 - x0 < 4 || y1 - y0 < 4) return null;
+    const d = c.getImageData(x0, y0, x1 - x0, y1 - y0).data; const w = x1 - x0, h = y1 - y0;
+    const border = [], inner = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; const px = [d[i], d[i + 1], d[i + 2]]; (x < 3 || y < 3 || x >= w - 3 || y >= h - 3) ? border.push(px) : (((x + y) & 1) === 0 && inner.push(px)); }
+    const med = arr => { if (!arr.length) return [128, 128, 128]; const ch = [0, 1, 2].map(k => arr.map(p => p[k]).sort((a, b) => a - b)); return ch.map(v => v[v.length >> 1]); };
+    const bg = med(border);
+    const far = inner.filter(p => Math.abs(p[0] - bg[0]) + Math.abs(p[1] - bg[1]) + Math.abs(p[2] - bg[2]) > 90);
+    const fg = far.length > inner.length * 0.03 ? med(far) : ((bg[0] * 299 + bg[1] * 587 + bg[2] * 114) / 1000 > 128 ? [20, 24, 22] : [245, 245, 240]);
+    return { bg: `rgb(${bg.join(",")})`, fg: `rgb(${fg.join(",")})` };
+  } catch (_) { return null; }
+}
 function matchRegions(lines) {
   const now = performance.now(); const used = new Set();
   for (const r of regions) {
@@ -289,10 +311,11 @@ function matchRegions(lines) {
       if (k) r.box = { x: r.box.x + dx * k, y: r.box.y + dy * k, w: r.box.w + dw * k, h: r.box.h + dh * k };
       r.seen++; r.miss = 0; r.lastSeen = now;
       if (ln.text !== r.text && ln.conf > r.conf + 6 && !r.edited) { r.text = ln.text; r.conf = ln.conf; r.en = null; r.pending = true; r.meta = null; }
+      if (!r.colors || r.seen % 6 === 0) r.colors = sampleColors(ln.box) || r.colors;
       else if (ln.conf > r.conf) r.conf = ln.conf;
     } else { r.miss++; }
   }
-  lines.forEach((ln, i) => { if (!used.has(i)) regions.push({ id: ++regionSeq, text: ln.text, conf: ln.conf, box: ln.box, seen: 1, miss: 0, lastSeen: now, created: now, en: null, pending: true, alpha: 0 }); });
+  lines.forEach((ln, i) => { if (!used.has(i)) regions.push({ id: ++regionSeq, text: ln.text, conf: ln.conf, box: ln.box, seen: 1, miss: 0, lastSeen: now, created: now, en: null, pending: true, alpha: 0, colors: sampleColors(ln.box) }); });
   for (let i = regions.length - 1; i >= 0; i--) { const r = regions[i]; if (r.miss >= 2 || (r.seen < 2 && r.miss >= 1)) regions.splice(i, 1); }
 }
 async function translatePending() {
@@ -301,7 +324,15 @@ async function translatePending() {
   try {
     const srcs = todo.map(r => { const p = parsePrice(r.text); r.price = p; return p ? r.text.replace(p.raw, "").replace(/[:：\-–—·]+\s*$/, "").trim() || r.text : r.text; });
     const ens = await toEnglish(srcs.map(s => s || " "));
-    todo.forEach((r, i) => { r.srcName = srcs[i]; r.en = ens[i] || r.text; r.meta = glossaryLookup(srcs[i]); r.pending = false; r.inflight = false; });
+    todo.forEach((r, i) => {
+      r.srcName = srcs[i]; r.meta = glossaryLookup(srcs[i]); r.pending = false; r.inflight = false;
+      let en = ens[i] || r.text; r.enName = en.replace(/[.。]$/, "");
+      if (r.price) { // keep the number where it was: trailing or leading, with the same separator
+        const raw = r.price.raw.trim(); const idx = r.text.indexOf(raw); const sep = /[—–\-:：]\s*$/.test(r.text.slice(0, idx)) ? " — " : "  ";
+        en = idx >= r.text.length / 2 ? en.replace(/[.。]$/, "") + sep + raw : raw + sep + en.replace(/[.。]$/, "");
+      }
+      r.en = en;
+    });
   } catch (e) { todo.forEach(r => { r.inflight = false; }); if (!navigator.onLine && res.toEn !== "ok") setHint("Connect to WiFi once to finish the " + L().name + " pack", 3000); }
 }
 /* Global motion estimate between frames so overlays follow a pan until the next recognition lands. */
@@ -337,49 +368,32 @@ function renderLoop() {
     const b = toPx(rg.box); rg.px = drawCard(ctx, b, rg, dpr, W);
   }
 }
-function drawCard(ctx, b, rg, dpr, W) {
-  if (camMode !== "menu") return drawLabel(ctx, b, rg, dpr, W);
-  const pad = 10 * dpr, isMenu = true;
-  const title = rg.en || "", sub = rg.srcName && rg.srcName !== rg.en ? rg.srcName + (isMenu ? " · Tap to explore" : "") : (isMenu ? "Tap to explore" : "");
-  let fs = Math.max(13 * dpr, Math.min(22 * dpr, b.h * 0.62));
-  ctx.font = `600 ${fs}px ${getComputedStyle(document.body).getPropertyValue("--display")}`;
-  const priceTxt = rg.price ? rg.price.display : "";
-  const maxW = Math.min(W - 2 * pad, Math.max(b.w + 2 * pad, 150 * dpr));
-  let tw = ctx.measureText(title).width; const pw = priceTxt ? ctx.measureText(priceTxt).width + 14 * dpr : 0;
-  while (tw + pw + 2 * pad > maxW && fs > 11 * dpr) { fs -= dpr; ctx.font = `600 ${fs}px ${getComputedStyle(document.body).getPropertyValue("--display")}`; tw = ctx.measureText(title).width; }
-  const showSub = !!sub && b.h > 24 * dpr; const subFs = Math.max(10 * dpr, fs * 0.6);
-  const cw = Math.max(Math.min(maxW, tw + pw + 2 * pad), isMenu ? Math.min(W - 2 * pad, b.w + 2 * pad) : 0);
-  const ch = fs * 1.25 + (showSub ? subFs * 1.3 : 0) + 2 * pad * 0.8;
-  let x = b.x - pad * 0.5, y = b.y + b.h / 2 - ch / 2; x = Math.max(pad * 0.5, Math.min(x, W - cw - pad * 0.5));
-  ctx.globalAlpha = rg.alpha * 0.96;
-  ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = 10 * dpr; ctx.shadowOffsetY = 2 * dpr;
-  ctx.fillStyle = "#FBF9F2"; roundRect(ctx, x, y, cw, ch, 10 * dpr); ctx.fill();
-  ctx.shadowColor = "transparent";
-  ctx.fillStyle = "#14201B"; ctx.textBaseline = "top";
-  ctx.font = `600 ${fs}px ${getComputedStyle(document.body).getPropertyValue("--display")}`;
-  ctx.fillText(title, x + pad, y + pad * 0.8, cw - 2 * pad - pw);
-  if (priceTxt) { ctx.textAlign = "right"; ctx.fillText(priceTxt + (isMenu ? " +" : ""), x + cw - pad, y + pad * 0.8); ctx.textAlign = "left"; }
-  if (showSub) { ctx.fillStyle = "#6B746E"; ctx.font = `400 ${subFs}px ${getComputedStyle(document.body).getPropertyValue("--cjk")}`; ctx.fillText(sub, x + pad, y + pad * 0.8 + fs * 1.25, cw - 2 * pad); }
-  ctx.globalAlpha = 1;
-  return { x, y, w: cw, h: ch };
-}
-/* Text mode: the English sits right under the original line, matched to its size, no box. */
-function drawLabel(ctx, b, rg, dpr, W) {
+function drawCard(ctx, b, rg, dpr, W) { return drawReplace(ctx, b, rg, dpr, W); }
+/* In-place replacement: the sign's background colour covers the original line; the English is drawn in the sign's ink colour, same size and position. */
+function drawReplace(ctx, b, rg, dpr, W) {
   const title = rg.en || ""; if (!title) return null;
+  const col = rg.colors || { bg: "rgba(250,248,242,1)", fg: "#14201B" };
   const font = getComputedStyle(document.body).getPropertyValue("--display");
-  let fs = Math.max(12 * dpr, Math.min(30 * dpr, b.h * 0.85));
-  ctx.font = `600 ${fs}px ${font}`; let tw = ctx.measureText(title).width;
-  const maxW = Math.min(W - 16 * dpr, Math.max(b.w * 1.6, 160 * dpr));
-  while (tw > maxW && fs > 10 * dpr) { fs -= dpr; ctx.font = `600 ${fs}px ${font}`; tw = ctx.measureText(title).width; }
-  let x = b.x; if (x + tw > W - 8 * dpr) x = Math.max(8 * dpr, W - 8 * dpr - tw);
-  const y = b.y + b.h + 2 * dpr;
+  const padY = Math.max(2 * dpr, b.h * 0.12), padX = Math.max(3 * dpr, b.h * 0.18);
+  // keep sizes consistent across a sign: no single line much bigger than its neighbours
+  const hs = regions.filter(r => r.en && r.px).map(r => r.px.h).sort((a, b) => a - b); const medH = hs.length >= 3 ? hs[hs.length >> 1] : null;
+  let fs = Math.max(11 * dpr, Math.min(44 * dpr, b.h * 0.86)); if (medH) fs = Math.min(fs, medH * 0.86 * 1.3);
+  const wgt = 600;
+  ctx.font = `${wgt} ${fs}px ${font}`; let tw = ctx.measureText(title).width;
+  const left = Math.max(2 * dpr, b.x - padX);
+  const roomW = Math.min(W - left - 2 * padX - 2 * dpr, Math.max(b.w, 1) * 1.45);
+  while (tw > roomW && fs > 9 * dpr) { fs -= dpr; ctx.font = `${wgt} ${fs}px ${font}`; tw = ctx.measureText(title).width; }
+  const visibleW = Math.max(0, Math.min(b.x + b.w, W - 2 * dpr) - Math.max(b.x, 0));
+  const cw = Math.min(W - left - 2 * dpr, Math.max(visibleW, tw) + 2 * padX), ch = b.h + 2 * padY;
+  const x = left, y = b.y - padY;
+  if (b.x + b.w < 0 || b.x > W) return null;
   ctx.globalAlpha = rg.alpha;
-  ctx.textBaseline = "top"; ctx.textAlign = "left";
-  ctx.lineJoin = "round"; ctx.lineWidth = Math.max(1.5 * dpr, fs * 0.09); ctx.strokeStyle = "rgba(10,18,14,.7)";
-  ctx.strokeText(title, x, y, maxW);
-  ctx.fillStyle = "#FFFFFF"; ctx.fillText(title, x, y, maxW);
-  ctx.globalAlpha = 1;
-  return { x: Math.min(x, b.x), y: b.y, w: Math.max(tw, b.w), h: b.h + fs * 1.25 + 2 * dpr };
+  ctx.fillStyle = col.bg; roundRect(ctx, x, y, cw, ch, Math.min(6 * dpr, ch * 0.2)); ctx.fill();
+  ctx.fillStyle = col.fg; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  ctx.fillText(title, x + padX, y + ch / 2 + fs * 0.04, cw - 2 * padX);
+  if (camMode === "menu" && rg.price) { const r = Math.max(5 * dpr, fs * 0.2); const cx = Math.min(W - r - 2 * dpr, x + cw + r * 1.4), cy = y + ch / 2; ctx.globalAlpha = rg.alpha * 0.9; ctx.fillStyle = col.fg; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = col.bg; ctx.font = `700 ${r * 1.6}px ${font}`; ctx.textAlign = "center"; ctx.fillText("+", cx, cy + r * 0.05); ctx.textAlign = "left"; }
+  ctx.globalAlpha = 1; ctx.textBaseline = "top";
+  return { x, y, w: cw, h: ch };
 }
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 overlay.addEventListener("pointerdown", e => {
@@ -395,7 +409,7 @@ function openRegion(rg) {
   const price = rg.price ? `${rg.price.display}${rg.price.unit ? " " + rg.price.unit : ""}${rg.price.certain ? "" : " (price association uncertain)"}` : "Price not readable";
   openSheet(`
     <div class="eyebrow">${isMenu ? "From the live menu" : "What it says"}</div>
-    <h2>${esc(rg.en || "…")}</h2>
+    <h2>${esc(rg.enName || rg.en || "…")}</h2>
     <div class="sub"><span class="cjk">${esc(orig)}</span>${rg.price ? ` · ${esc(rg.price.display)}` : ""}</div>
     <div class="hr"></div>
     ${isMenu ? `
@@ -416,11 +430,11 @@ function openRegion(rg) {
     if (isMenu) {
       $("qMinus").onclick = () => { q = Math.max(1, q - 1); qv.textContent = q; };
       $("qPlus").onclick = () => { q++; qv.textContent = q; };
-      $("addOrder").onclick = () => { addToOrder({ zh: orig, en: rg.en, price: rg.price ? rg.price.value : null, priceCertain: !!(rg.price && rg.price.certain), unit: rg.price ? rg.price.unit : "", qty: q }); closeSheet(); toast("Added to your order"); };
-      $("askIngr").onclick = () => { closeSheet(); goConversation("restaurant", [["What is in " + rg.en + "?", null, orig], ["Does this contain nuts?", null], ["Is this dish spicy?", L().glossary ? "这道菜辣吗？" : null]]); };
+      $("addOrder").onclick = () => { addToOrder({ zh: orig, en: rg.enName || rg.en, price: rg.price ? rg.price.value : null, priceCertain: !!(rg.price && rg.price.certain), unit: rg.price ? rg.price.unit : "", qty: q }); closeSheet(); toast("Added to your order"); };
+      $("askIngr").onclick = () => { closeSheet(); goConversation("restaurant", [["What is in " + (rg.enName || rg.en) + "?", null, orig], ["Does this contain nuts?", null], ["Is this dish spicy?", L().glossary ? "这道菜辣吗？" : null]]); };
     } else {
-      $("askThis").onclick = () => { closeSheet(); goConversation(null, [["What does this mean: " + rg.en + "?", null, orig]]); };
-      $("savePhrase").onclick = () => { saveItem("phrases", { en: rg.en, zh: orig }); toast("Saved to Phrases"); };
+      $("askThis").onclick = () => { closeSheet(); goConversation(null, [["What does this mean: " + (rg.enName || rg.en) + "?", null, orig]]); };
+      $("savePhrase").onclick = () => { saveItem("phrases", { en: rg.enName || rg.en, zh: orig }); toast("Saved to Phrases"); };
     }
     $("editText").onclick = () => editRegion(rg);
   });
@@ -433,9 +447,9 @@ function editRegion(rg) {
 $("askBtn").onclick = () => {
   const items = regions.filter(r => r.en).slice(0, 8);
   openSheet(`<div class="eyebrow">Ask about what's in view</div><h2>Numbered, so you can point.</h2>
-    ${items.length ? `<div class="list">${items.map((r, i) => `<div class="item"><div class="n"><div><b>${i + 1}.</b> ${esc(r.en)}</div><div class="cjk">${esc(r.srcName || r.text)}</div></div><button data-i="${i}">Ask</button></div>`).join("")}</div>` : `<div class="empty">Nothing readable in view yet. Point at the text and try again.</div>`}
+    ${items.length ? `<div class="list">${items.map((r, i) => `<div class="item"><div class="n"><div><b>${i + 1}.</b> ${esc(r.enName || r.en)}</div><div class="cjk">${esc(r.srcName || r.text)}</div></div><button data-i="${i}">Ask</button></div>`).join("")}</div>` : `<div class="empty">Nothing readable in view yet. Point at the text and try again.</div>`}
     <p class="sub">Each item is a label as read. The app doesn't see what a button or control does; ask staff when it matters.</p>`, () => {
-    sheet.querySelectorAll(".item button").forEach(b => b.onclick = () => { const r = items[+b.dataset.i]; closeSheet(); goConversation(null, [["What does this mean: " + r.en + "?", null, r.srcName || r.text], ["Which one is the entrance?", L().glossary ? "哪一个是入口？" : null], ["Is this price per person?", L().glossary ? "这个价格是每人的吗？" : null]]); });
+    sheet.querySelectorAll(".item button").forEach(b => b.onclick = () => { const r = items[+b.dataset.i]; closeSheet(); goConversation(null, [["What does this mean: " + (r.enName || r.en) + "?", null, r.srcName || r.text], ["Which one is the entrance?", L().glossary ? "哪一个是入口？" : null], ["Is this price per person?", L().glossary ? "这个价格是每人的吗？" : null]]); });
   });
 };
 
