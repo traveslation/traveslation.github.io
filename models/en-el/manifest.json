@@ -1,0 +1,33 @@
+{
+ "pair": "en-el",
+ "architecture": "tiny",
+ "source": "spring-2024_Y3ThG3XkTxG4ROUQK2LpVg",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.enel.s2t.bin.gz",
+   "size": 1352643,
+   "sha256": "e03309c345e05bf23956a9e3d637d65cea1e75f323dbcb958c51cfb58397306a",
+   "parts": [
+    "lex.50.50.enel.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.enel.intgemm.alphas.bin.gz",
+   "size": 12808027,
+   "sha256": "cfe3af93ed24be241638ff246b716855bfcb7273b7a57c4fb6ac73bbe660479a",
+   "parts": [
+    "model.enel.intgemm.alphas.bin.gz.part00",
+    "model.enel.intgemm.alphas.bin.gz.part01",
+    "model.enel.intgemm.alphas.bin.gz.part02"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.enel.spm.gz",
+   "size": 419275,
+   "sha256": "bfbab13d4ff67e08e98e9203ab0d7efd02fa143614b3244da1902baf47793b26",
+   "parts": [
+    "vocab.enel.spm.gz.part00"
+   ]
+  }
+ }
+}
