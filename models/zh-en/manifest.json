@@ -1,0 +1,38 @@
+{
+ "pair": "zh-en",
+ "architecture": "base-memory",
+ "source": "cjk_retrain_base-memory_cNY_yaJCStGwnTeXgW8A5w",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.zhen.s2t.bin.gz",
+   "size": 4822158,
+   "sha256": "216b4f87e61c89741114fa36b3cf01fb1e3a32cf0eb97bf1cb2f992951e8691b",
+   "parts": [
+    "lex.50.50.zhen.s2t.bin.gz.part00",
+    "lex.50.50.zhen.s2t.bin.gz.part01"
+   ]
+  },
+  "model": {
+   "name": "model.zhen.intgemm.alphas.bin.gz",
+   "size": 32726806,
+   "sha256": "c430e24baad44b8e4f725458e2454aec8a760faefbd0a4592c80f114b051f692",
+   "parts": [
+    "model.zhen.intgemm.alphas.bin.gz.part00",
+    "model.zhen.intgemm.alphas.bin.gz.part01",
+    "model.zhen.intgemm.alphas.bin.gz.part02",
+    "model.zhen.intgemm.alphas.bin.gz.part03",
+    "model.zhen.intgemm.alphas.bin.gz.part04",
+    "model.zhen.intgemm.alphas.bin.gz.part05",
+    "model.zhen.intgemm.alphas.bin.gz.part06"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.zhen.spm.gz",
+   "size": 738862,
+   "sha256": "244ac04cd4e2126852fc6f697b2aa1e04acad4492c5ec8b37453974f33f88183",
+   "parts": [
+    "vocab.zhen.spm.gz.part00"
+   ]
+  }
+ }
+}
