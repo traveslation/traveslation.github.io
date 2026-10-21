@@ -1,0 +1,46 @@
+{
+ "pair": "zh_hant-en",
+ "architecture": "base-memory",
+ "source": "zh_hant_openlid_zh_tw_lr0002_WJi5Ozi7SZWC6hgfD5GhTA",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.zh_hanten.s2t.bin.gz",
+   "size": 3268812,
+   "sha256": "69046bfea1a70a556b5669be3c014958698683ef3c3f00b8dfd5c6b4e8f4f8ca",
+   "parts": [
+    "lex.50.50.zh_hanten.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.zh_hanten.intgemm.alphas.bin.gz",
+   "size": 33653648,
+   "sha256": "07af851b5a9160e84f3327e6f6151725e2712bed7b6b86edde5920fae107e55b",
+   "parts": [
+    "model.zh_hanten.intgemm.alphas.bin.gz.part00",
+    "model.zh_hanten.intgemm.alphas.bin.gz.part01",
+    "model.zh_hanten.intgemm.alphas.bin.gz.part02",
+    "model.zh_hanten.intgemm.alphas.bin.gz.part03",
+    "model.zh_hanten.intgemm.alphas.bin.gz.part04",
+    "model.zh_hanten.intgemm.alphas.bin.gz.part05",
+    "model.zh_hanten.intgemm.alphas.bin.gz.part06",
+    "model.zh_hanten.intgemm.alphas.bin.gz.part07"
+   ]
+  },
+  "srcVocab": {
+   "name": "srcvocab.zh_hanten.spm.gz",
+   "size": 423691,
+   "sha256": "e28a5484fce525e13a6cde4737b2fac08cb3c9cc60c13da9a6395c38833f7936",
+   "parts": [
+    "srcvocab.zh_hanten.spm.gz.part00"
+   ]
+  },
+  "trgVocab": {
+   "name": "trgvocab.zh_hanten.spm.gz",
+   "size": 408143,
+   "sha256": "071d675ee1a1b5faffbde94910814998f187df9717b007ae56d54d0a6ae791ac",
+   "parts": [
+    "trgvocab.zh_hanten.spm.gz.part00"
+   ]
+  }
+ }
+}
