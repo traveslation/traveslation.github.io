@@ -1,0 +1,36 @@
+{
+ "pair": "en-vi",
+ "architecture": "base-memory",
+ "source": "test_prompsit_Ep8JhBQ3QRizDT91JVy8KQ",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.envi.s2t.bin.gz",
+   "size": 2246027,
+   "sha256": "12e8809c89d33dd1052c1619733d84fb7be9f49e5e72102e71fcf9f13c47737a",
+   "parts": [
+    "lex.50.50.envi.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.envi.intgemm.alphas.bin.gz",
+   "size": 24244705,
+   "sha256": "0c0c339e218ca55ee577e4f0f800ba5bd0ad57f76ac940978e95663cf36bbe4a",
+   "parts": [
+    "model.envi.intgemm.alphas.bin.gz.part00",
+    "model.envi.intgemm.alphas.bin.gz.part01",
+    "model.envi.intgemm.alphas.bin.gz.part02",
+    "model.envi.intgemm.alphas.bin.gz.part03",
+    "model.envi.intgemm.alphas.bin.gz.part04",
+    "model.envi.intgemm.alphas.bin.gz.part05"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.envi.spm.gz",
+   "size": 400183,
+   "sha256": "497f3de63d59fd9f89bafc5e215e5cc8a308981f49a94de813c8fd0490885e25",
+   "parts": [
+    "vocab.envi.spm.gz.part00"
+   ]
+  }
+ }
+}
