@@ -34,12 +34,52 @@ const PACK_MB = { zh: 73, zht: 74, ja: 74, ko: 75, es: 52, fr: 52, it: 53, pt: 5
 let lang = store.get("lang", "zh"); if (!LANGS[lang]) lang = "zh";
 const L = () => LANGS[lang];
 const toEnPair = k => (LANGS[k] || L()).mt + "-en", fromEnPair = k => "en-" + (LANGS[k] || L()).mt;
-$("lang").innerHTML = Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join("");
-$("lang").value = lang;
-$("lang").onchange = () => { setLang($("lang").value); };
+let autoLang = store.get("autoLang", true);
+function renderLangSelect() {
+  $("lang").innerHTML = `<option value="auto">${autoLang ? "Auto · " + esc(L().label) : "Detect language"}</option>` + Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join("");
+  $("lang").value = autoLang ? "auto" : lang;
+}
+renderLangSelect();
+$("lang").onchange = () => { const v = $("lang").value; if (v === "auto") { autoLang = true; store.set("autoLang", true); renderLangSelect(); toast("Detecting the language from what the camera sees"); } else { autoLang = false; store.set("autoLang", false); setLang(v); renderLangSelect(); } };
 function setLang(k) {
   if (!LANGS[k] || k === lang) return; lang = k; store.set("lang", k);
-  regions.length = 0; transCache.clear(); restartOcr(); renderSuggestions(); autoStock(); updateReady();
+  regions.length = 0; transCache.clear(); restartOcr(); renderSuggestions(); renderLangSelect(); autoStock(); updateReady();
+}
+/* Language detection from recognized text: script first, then word and letter cues for Latin-script languages. */
+const LATIN_CUES = {
+  es: { chars: /[ñ¿¡]/g, words: /\b(el|la|los|las|de|del|con|y|pollo|carne|cerdo|arroz|salida|entrada|baños|precio|menú|por favor|gracias)\b/gi },
+  fr: { chars: /[èêçœ]/g, words: /\b(le|les|des|du|au|aux|et|avec|poulet|porc|riz|sortie|secours|interdit|fumer|entrée|toilettes|prix|merci|s'il|vous)\b/gi },
+  it: { chars: /[àèéìòù]/g, words: /\b(il|lo|gli|di|con|e|pollo|maiale|riso|uscita|entrata|bagno|prezzo|menù|grazie|della|alla)\b/gi },
+  pt: { chars: /[ãõç]/g, words: /\b(o|a|os|as|de|do|da|com|e|frango|porco|arroz|saída|entrada|banheiro|preço|obrigado|não)\b/gi },
+  de: { chars: /[äöüß]/g, words: /\b(der|die|das|und|mit|hähnchen|schwein|reis|ausgang|eingang|toilette|preis|danke|bitte|nicht)\b/gi },
+  nl: { chars: /(ij)/g, words: /\b(de|het|een|en|met|kip|varken|rijst|uitgang|ingang|toilet|prijs|dank|niet|van)\b/gi },
+  tr: { chars: /[ışğçöüİ]/g, words: /\b(ve|ile|tavuk|et|pilav|çıkış|giriş|tuvalet|fiyat|teşekkür|lütfen|bir)\b/gi },
+  id: { chars: /(ng|ny)/g, words: /\b(dan|dengan|ayam|daging|nasi|keluar|masuk|toilet|harga|terima kasih|tidak|yang)\b/gi },
+  vi: { chars: /[đơưăâêôạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/g, words: /\b(và|với|gà|thịt|cơm|lối ra|lối vào|nhà vệ sinh|giá|cảm ơn|không)\b/gi },
+};
+function detectLangFromText(text) {
+  if (/[\u3040-\u30ff]/.test(text)) return "ja";
+  if (/[\uac00-\ud7af]/.test(text)) return "ko";
+  if (/[\u0e00-\u0e7f]/.test(text)) return "th";
+  if (/[\u0600-\u06ff]/.test(text)) return "ar";
+  if (/[\u0900-\u097f]/.test(text)) return "hi";
+  if (/[\u0400-\u04ff]/.test(text)) return "ru";
+  if (/[\u0370-\u03ff]/.test(text)) return "el";
+  if (/[\u3400-\u9fff]/.test(text)) return lang === "zht" ? "zht" : "zh";
+  const latin = text.replace(/[^\p{L}\s']/gu, " ");
+  if (latin.replace(/\s/g, "").length < 6) return null;
+  let best = null, bestScore = 0, second = 0;
+  for (const [k, c] of Object.entries(LATIN_CUES)) { const sc = (latin.match(c.chars) || []).length * 2 + (latin.match(c.words) || []).length * 3; if (sc > bestScore) { second = bestScore; bestScore = sc; best = k; } else if (sc > second) second = sc; }
+  return bestScore >= 3 && bestScore > second ? best : null;
+}
+let detectVotes = { k: null, n: 0 };
+function considerAutoLang(lines) {
+  if (!autoLang || !lines.length) return;
+  const text = lines.map(l => l.text).join(" ");
+  const k = detectLangFromText(text); if (!k) return;
+  if (k === lang) { detectVotes = { k, n: 0 }; return; }
+  detectVotes = detectVotes.k === k ? { k, n: detectVotes.n + 1 } : { k, n: 1 };
+  if (detectVotes.n >= 2) { detectVotes = { k, n: 0 }; setHint(LANGS[k].name + " detected", 2200); setLang(k); }
 }
 
 /* ---------------- Sheets ---------------- */
@@ -156,7 +196,7 @@ function parsePrice(text) {
 
 /* ---------------- Camera pipeline ---------------- */
 const video = $("video"), overlay = $("overlay"), stage = $("stage"), hint = $("hint");
-let stream = null, frozen = false, camMode = store.get("camMode", "menu"), ocrBusy = false, ocrTimer = null, raf = null;
+let stream = null, frozen = false, camMode = store.get("camMode", "text"), ocrBusy = false, ocrTimer = null, raf = null;
 const regions = []; let regionSeq = 0; window.__regions = regions; window.__state = () => ({ ocr: !!ocrWorker, rs: video.readyState, busy: ocrBusy, res: { ...res }, stream: !!stream, timer: !!ocrTimer, view });
 const work = document.createElement("canvas"); const thumbA = document.createElement("canvas"), thumbB = document.createElement("canvas");
 const TW = 48, TH = 27; let prevThumb = null, motionAcc = { x: 0, y: 0 };
@@ -175,7 +215,7 @@ function stopCamera() { clearTimeout(ocrTimer); ocrTimer = null; if (stream) { s
 function restartOcr() { if (view === "camera" && stream) getOcr().then(() => loopOcr()).catch(() => {}); }
 function loopOcr() { clearTimeout(ocrTimer); if (view !== "camera" || !stream) return; ocrTimer = setTimeout(async () => { await scanFrame(); loopOcr(); }, 120); }
 $("freezeBtn").onclick = () => { frozen = !frozen; $("freezeBtn").classList.toggle("on", frozen); if (frozen) video.pause(); else video.play().catch(() => {}); $("liveLabel").textContent = frozen ? "Paused" : "Live translation"; $("liveChip").classList.toggle("off", frozen); };
-$("modeMenu").onclick = () => { camMode = camMode === "menu" ? "text" : "menu"; store.set("camMode", camMode); $("modeMenu").classList.toggle("on", camMode === "menu"); setHint(camMode === "menu" ? "Menu mode: tap a dish to explore and order" : "Text mode", 1800); };
+$("modeMenu").onclick = () => { camMode = camMode === "menu" ? "text" : "menu"; menuAutoOff = camMode === "text"; store.set("camMode", camMode); $("modeMenu").classList.toggle("on", camMode === "menu"); regions.forEach(r => { r.pending = true; }); setHint(camMode === "menu" ? "Menu mode: tap a dish to explore and order" : "Text mode: English replaces the text in view", 1800); };
 $("modeMenu").classList.toggle("on", camMode === "menu");
 
 function textSim(a, b) {
@@ -186,7 +226,7 @@ function textSim(a, b) {
   const ga = grams(a), gb = grams(b); let inter = 0; for (const [g, n] of ga) if (gb.has(g)) inter += Math.min(n, gb.get(g));
   return 2 * inter / ((la - 1) + (lb - 1));
 }
-const norm = s => s.replace(/\s+/g, L().cjk ? "" : " ").trim();
+const norm = s => s.replace(/\s+/g, " ").replace(/(?<=[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af])\s+(?=[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af¥￥\d])/g, "").trim();
 async function scanFrame() {
   if (ocrBusy || frozen || !ocrWorker || video.readyState < 2 || document.hidden) return;
   ocrBusy = true;
@@ -201,17 +241,26 @@ async function scanFrame() {
     if (w !== ocrWorker || myLang !== lang) return;
     const l = L();
     const lines = (data.lines || []).map(x => ({ raw: x.text.replace(/\s+/g, " ").trim(), conf: x.confidence, b: x.bbox }))
-      .filter(x => x.conf > 50 && x.raw.replace(/[^\p{L}\p{N}]/gu, "").length >= 1 && (l.script.test(x.raw) || /[A-Za-z]{2,}|\d/.test(x.raw)))
+      .filter(x => x.conf > 50 && x.raw.replace(/[^\p{L}\p{N}]/gu, "").length >= 1 && (autoLang || l.script.test(x.raw) || /[A-Za-z]{2,}|\d/.test(x.raw)))
       .map(x => ({ text: norm(x.raw.replace(/[|_~^`]+/g, "")), conf: x.conf, box: { x: x.b.x0 / work.width, y: x.b.y0 / work.height, w: (x.b.x1 - x.b.x0) / work.width, h: (x.b.y1 - x.b.y0) / work.height } }))
       .filter(x => x.text.length >= 1 && x.box.w > 0.02 && x.box.h > 0.012);
     // motion that happened while OCR ran: shift the fresh boxes forward so they line up with the current view
     const dx = motionAcc.x - motionBefore.x, dy = motionAcc.y - motionBefore.y; lines.forEach(x => { x.box.x += dx; x.box.y += dy; });
     matchRegions(lines);
+    autoMenu();
+    considerAutoLang(lines);
     const small = (data.lines || []).filter(x => x.confidence > 30 && x.confidence <= 50).length;
     if (!lines.length) setHint(small ? "Move closer or hold steady" : "", small ? 1500 : 0);
     await translatePending();
   } catch (e) { if (!/ocr timeout/.test(e.message)) console.error(e); } finally { ocrBusy = false; }
 }
+let menuAutoOff = false;
+function autoMenu() {
+  if (camMode === "menu" || menuAutoOff) return;
+  const dishy = regions.filter(r => r.seen >= 2 && (parsePriceAny(r.text) || (r.meta && r.meta.dish))).length;
+  if (dishy >= 2) { camMode = "menu"; store.set("camMode", "menu"); $("modeMenu").classList.add("on"); regions.forEach(r => { r.pending = true; }); setHint("Looks like a menu. Tap a dish to explore and order", 2600); }
+}
+function parsePriceAny(text) { return /(?:¥|￥|RMB|\$|€|£|₩|฿|₫|₹)\s*\d|\d+(?:[.,]\d{1,2})?\s*(?:元|块|yuan|RMB)/i.test(text); }
 function matchRegions(lines) {
   const now = performance.now(); const used = new Set();
   for (const r of regions) {
@@ -277,7 +326,8 @@ function renderLoop() {
   }
 }
 function drawCard(ctx, b, rg, dpr, W) {
-  const pad = 10 * dpr, isMenu = camMode === "menu";
+  if (camMode !== "menu") return drawLabel(ctx, b, rg, dpr, W);
+  const pad = 10 * dpr, isMenu = true;
   const title = rg.en || "", sub = rg.srcName && rg.srcName !== rg.en ? rg.srcName + (isMenu ? " · Tap to explore" : "") : (isMenu ? "Tap to explore" : "");
   let fs = Math.max(13 * dpr, Math.min(22 * dpr, b.h * 0.62));
   ctx.font = `600 ${fs}px ${getComputedStyle(document.body).getPropertyValue("--display")}`;
@@ -298,6 +348,24 @@ function drawCard(ctx, b, rg, dpr, W) {
   ctx.fillText(title, x + pad, y + pad * 0.8, cw - 2 * pad - pw);
   if (priceTxt) { ctx.textAlign = "right"; ctx.fillText(priceTxt + (isMenu ? " +" : ""), x + cw - pad, y + pad * 0.8); ctx.textAlign = "left"; }
   if (showSub) { ctx.fillStyle = "#6B746E"; ctx.font = `400 ${subFs}px ${getComputedStyle(document.body).getPropertyValue("--cjk")}`; ctx.fillText(sub, x + pad, y + pad * 0.8 + fs * 1.25, cw - 2 * pad); }
+  ctx.globalAlpha = 1;
+  return { x, y, w: cw, h: ch };
+}
+/* Text mode: a flat label that replaces the original text in place. */
+function drawLabel(ctx, b, rg, dpr, W) {
+  const title = rg.en || ""; if (!title) return null;
+  const padX = 6 * dpr, padY = 3 * dpr, font = getComputedStyle(document.body).getPropertyValue("--display");
+  let fs = Math.max(11 * dpr, Math.min(26 * dpr, b.h * 0.72));
+  ctx.font = `600 ${fs}px ${font}`; let tw = ctx.measureText(title).width;
+  const maxW = W - 2 * padX;
+  while (tw + 2 * padX > Math.max(b.w * 1.6, 120 * dpr) && fs > 10 * dpr) { fs -= dpr; ctx.font = `600 ${fs}px ${font}`; tw = ctx.measureText(title).width; }
+  const cw = Math.min(maxW, Math.max(b.w, tw + 2 * padX)), ch = Math.max(b.h, fs * 1.2 + 2 * padY);
+  let x = b.x + b.w / 2 - cw / 2, y = b.y + b.h / 2 - ch / 2; x = Math.max(padX, Math.min(x, W - cw - padX));
+  ctx.globalAlpha = rg.alpha * 0.97;
+  ctx.shadowColor = "rgba(0,0,0,.12)"; ctx.shadowBlur = 6 * dpr; ctx.shadowOffsetY = 1 * dpr;
+  ctx.fillStyle = "#FBF9F2"; roundRect(ctx, x, y, cw, ch, 6 * dpr); ctx.fill(); ctx.shadowColor = "transparent";
+  ctx.fillStyle = "#14201B"; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+  ctx.fillText(title, x + cw / 2, y + ch / 2, cw - 2 * padX); ctx.textAlign = "left"; ctx.textBaseline = "top";
   ctx.globalAlpha = 1;
   return { x, y, w: cw, h: ch };
 }
@@ -499,7 +567,7 @@ function flushChunk() {
   if (!chunkLen) return; const all = new Float32Array(chunkLen); let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; } chunks = []; chunkLen = 0;
   const rms = Math.sqrt(all.reduce((s, v) => s + v * v, 0) / all.length); if (rms < 0.004) return;
   const t = addTurn({ who: "them", src: "", tr: "", live: true });
-  asrQueue = asrQueue.then(async () => { try { const r = await asrCall({ type: "asr", audio: all, task: "transcribe", language: L().whisper }); if (!r.text) { turns = turns.filter(x => x !== t); renderTurns(); return; } t.src = r.text; renderTurns(); t.tr = (await toEnglish([r.text]))[0]; t.live = false; renderTurns(); renderSuggestions(); } catch (e) { t.src = ""; t.tr = "Couldn't process that bit."; t.live = false; renderTurns(); } });
+  asrQueue = asrQueue.then(async () => { try { const r = await asrCall({ type: "asr", audio: all, task: "transcribe", language: autoLang ? null : L().whisper }); if (autoLang && r.language && r.language !== L().whisper) { const k = Object.keys(LANGS).find(x => LANGS[x].whisper === r.language); if (k) { setHint(LANGS[k].name + " detected", 2000); setLang(k); } } if (!r.text) { turns = turns.filter(x => x !== t); renderTurns(); return; } t.src = r.text; renderTurns(); t.tr = (await toEnglish([r.text]))[0]; t.live = false; renderTurns(); renderSuggestions(); } catch (e) { t.src = ""; t.tr = "Couldn't process that bit."; t.live = false; renderTurns(); } });
 }
 function stopOfflineCapture() { if (procNode) { try { procNode.disconnect(); srcNode.disconnect(); } catch (_) {} } if (micStream) micStream.getTracks().forEach(x => x.stop()); if (audioCtx) audioCtx.close().catch(() => {}); if (chunkLen) flushChunk(); procNode = srcNode = audioCtx = micStream = null; }
 /* Confirm details and rescue */
