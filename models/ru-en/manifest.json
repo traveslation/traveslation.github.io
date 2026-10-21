@@ -1,0 +1,35 @@
+{
+ "pair": "ru-en",
+ "architecture": "base-memory",
+ "source": "next26_RSpwfHrcSUC_rKTnhOEXzw",
+ "files": {
+  "lexicalShortlist": {
+   "name": "lex.50.50.ruen.s2t.bin.gz",
+   "size": 2139703,
+   "sha256": "012674431e3a248e5f647e88e254331eca37f661960ea82ceb93dab78850ccd8",
+   "parts": [
+    "lex.50.50.ruen.s2t.bin.gz.part00"
+   ]
+  },
+  "model": {
+   "name": "model.ruen.intgemm.alphas.bin.gz",
+   "size": 22805722,
+   "sha256": "1dc70ffc7dce84d46ad13b8c1908c46f0dfbf4e2ed1daaffb8b8b04315e00aa3",
+   "parts": [
+    "model.ruen.intgemm.alphas.bin.gz.part00",
+    "model.ruen.intgemm.alphas.bin.gz.part01",
+    "model.ruen.intgemm.alphas.bin.gz.part02",
+    "model.ruen.intgemm.alphas.bin.gz.part03",
+    "model.ruen.intgemm.alphas.bin.gz.part04"
+   ]
+  },
+  "vocab": {
+   "name": "vocab.ruen.spm.gz",
+   "size": 441622,
+   "sha256": "20f7d8032b12a7c1bba99784fca60ccf1d49e782f3cad8791e8cf0c2063b334c",
+   "parts": [
+    "vocab.ruen.spm.gz.part00"
+   ]
+  }
+ }
+}
