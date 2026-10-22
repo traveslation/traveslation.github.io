@@ -72,6 +72,18 @@ function detectLangFromText(text) {
   for (const [k, c] of Object.entries(LATIN_CUES)) { const sc = (latin.match(c.chars) || []).length * 2 + (latin.match(c.words) || []).length * 3; if (sc > bestScore) { second = bestScore; bestScore = sc; best = k; } else if (sc > second) second = sc; }
   return bestScore >= 3 && bestScore > second ? best : null;
 }
+/* Only foreign text gets replaced. English words, bare numbers and symbols are left exactly as they are on the sign. */
+const EN_WORDS = new Set("the a an and or of to in on at for with from by is are be no not yes open closed exit entrance enter push pull please thank thanks you welcome menu food drink drinks coffee tea water beer wine rice chicken beef pork fish lamb egg eggs soup salad noodle noodles fried grilled steamed spicy hot cold sweet sour set lunch dinner breakfast price prices free wifi toilet toilets restroom restrooms men women ladies gents room rooms hotel reception check out up down left right stop go way one only all new sale off day days hour hours minute minutes am pm mon tue wed thu fri sat sun monday tuesday wednesday thursday friday saturday sunday street road st rd ave avenue station bus train taxi airport gate platform ticket tickets cash card pay here there this that your our we it its small medium large size special house today tonight daily fresh local best original since est tel phone email www com net org http https info about contact home shop store market mall center centre park bar cafe restaurant kitchen bbq pizza burger sushi ramen dumplings dumpling tofu vegetable vegetables vegetarian vegan halal kosher ice cream cake bread milk juice soda cola lemon orange apple banana mango coconut spicy mild extra add order total subtotal tax service charge included tip discount member members only staff private danger caution warning wet floor fire emergency first aid police hospital pharmacy bank atm wc".split(" "));
+function isForeign(text, l) {
+  const letters = text.replace(/[^\p{L}]/gu, ""); if (!letters) return false; // numbers and symbols only
+  if (/[㐀-鿿぀-ヿ가-힯฀-๿؀-ۿऀ-ॿЀ-ӿͰ-Ͽ]/.test(text)) return true;
+  if (/[À-ɏẠ-ỹ]/.test(text)) return true; // accented Latin: not plain English
+  const words = text.toLowerCase().replace(/[^a-z'\s]/g, " ").split(/\s+/).filter(w => w.length > 1);
+  if (!words.length) return false;
+  if (!l || l.cjk || !/[A-Za-z]/.test(l.script.source)) return false; // Latin letters while reading a non-Latin language: it's English, leave it
+  const en = words.filter(w => EN_WORDS.has(w)).length;
+  return en / words.length < 0.5;
+}
 let detectVotes = { k: null, n: 0 };
 function considerAutoLang(lines) {
   if (!autoLang || !lines.length) return;
@@ -80,6 +92,40 @@ function considerAutoLang(lines) {
   if (k === lang) { detectVotes = { k, n: 0 }; return; }
   detectVotes = detectVotes.k === k ? { k, n: detectVotes.n + 1 } : { k, n: 1 };
   if (detectVotes.n >= 2) { detectVotes = { k, n: 0 }; setHint(LANGS[k].name + " detected", 2200); setLang(k); }
+}
+/* The reader can only see the script it was loaded with, so when what it reads looks doubtful (low confidence),
+   a second reader tries the other scripts on a small copy of the frame and the clear winner becomes the language. */
+let probeWorker = null, probing = false, lastProbe = 0, probeLang = "", probeWait = 5000;
+const PROBE_ORDER = ["zh", "ja", "ko", "th", "ru", "ar", "hi", "el", "es"];
+const probeCanvas = document.createElement("canvas");
+async function probeScripts(src) {
+  if (probing || !autoLang) return; probing = true; lastProbe = performance.now();
+  try {
+    const s = Math.min(1, 640 / Math.max(src.width, src.height)); probeCanvas.width = Math.round(src.width * s); probeCanvas.height = Math.round(src.height * s);
+    probeCanvas.getContext("2d").drawImage(src, 0, 0, probeCanvas.width, probeCanvas.height);
+    if (!probeWorker) probeWorker = await Tesseract.createWorker([], 1, { workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js", corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1", langPath: "tessdata", gzip: true });
+    let best = null;
+    for (const k of PROBE_ORDER) {
+      if (k === lang || !autoLang || view !== "camera") continue;
+      const l = LANGS[k];
+      if (!navigator.onLine && !store.get("ocr." + l.tess, false)) continue; // offline: only scripts whose reader is already on the phone
+      const timeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("probe timeout")), ms))]);
+      if (probeLang !== l.tess) { await timeout(probeWorker.reinitialize(l.tess === "kor" ? "kor" : l.tess + "+eng"), 20000); probeLang = l.tess; store.set("ocr." + l.tess, true); }
+      const { data } = await timeout(probeWorker.recognize(probeCanvas), 12000);
+      // confidence counted only on the characters that belong to the script being tried
+      let sum = 0, n = 0, chars = 0; const texts = [];
+      for (const w of data.words || []) { const t = w.text || ""; const m = (t.match(new RegExp(l.script.source, "g")) || []).length; if (!m) continue; chars += m; sum += w.confidence * m; n += m; texts.push(t); }
+      const score = n ? sum / n : 0;
+      if (chars >= 2 && (!best || score > best.score)) best = { k, score, chars, text: texts.join(" ") };
+      if (best && best.score >= 78 && best.chars >= 3) break;
+    }
+    // nothing clearer than the current reader: try again later, less and less often, until the view changes
+    if (!best || best.score < 70) { probeWait = Math.min(60000, probeWait * 2); return; }
+    let k = best.k;
+    if (k === "es") { k = detectLangFromText(best.text); if (!k) { probeWait = Math.min(60000, probeWait * 2); return; } }
+    probeWait = 5000;
+    if (k !== lang) { detectVotes = { k, n: 0 }; setHint(LANGS[k].name + " detected", 2200); setLang(k); }
+  } catch (e) { console.warn("probe", e); probeWait = Math.min(60000, probeWait * 2); if (probeWorker) { const w = probeWorker; probeWorker = null; probeLang = ""; w.terminate().catch(() => {}); } } finally { probing = false; }
 }
 
 /* ---------------- Sheets ---------------- */
@@ -100,7 +146,7 @@ async function getOcr(want) {
     if (ocrLoading && ocrLoading.lang !== want) { try { await ocrLoading.p; } catch (_) {} }
     if (ocrWorker) { const old = ocrWorker; ocrWorker = null; old.terminate().catch(() => {}); }
     res.ocr = "busy"; updateReady();
-    const w = await Tesseract.createWorker(want + "+eng", 1, {
+    const w = await Tesseract.createWorker(want === "kor" ? want : want + "+eng", 1, {
       workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
       corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1", langPath: "tessdata", gzip: true,
       logger: m => { if (m.status === "loading language traineddata" && m.progress != null) { progress.ocr = m.progress; stripProgress(); } }
@@ -161,6 +207,8 @@ function updateReady() {
 const transCache = new Map();
 const G = window.GLOSSARY || { signs: {}, dishes: {}, phrases: {} };
 function glossaryLookup(text) {
+  const W = G.words && G.words[lang];
+  if (W) { const k = text.trim(); const hit = W[k] || W[k.replace(/\s+/g, "")] || W[k.toLowerCase()]; if (hit) return { en: hit }; return null; }
   if (!L().glossary) return null;
   const t = text.replace(/\s+/g, "");
   if (G.dishes[t]) return { en: G.dishes[t].en, dish: G.dishes[t], key: t };
@@ -172,6 +220,34 @@ function glossaryLookup(text) {
   let best = null; for (const k of Object.keys(G.dishes)) if (k.length >= 3 && t.includes(k) && (!best || k.length > best.length)) best = k;
   if (best) return { en: G.dishes[best].en, dish: G.dishes[best], key: best, partial: true };
   return null;
+}
+/* Camera text is translated run by run: only the foreign-script runs are replaced, numbers, prices,
+   English and symbols stay exactly where and how they were written ("삼겹살 200g — 16,000원" → "Pork belly 200g — 16,000 won"). */
+const CURRENCY_WORDS = { "원": "won", "円": "yen", "元": "yuan", "块": "yuan", "角": "jiao", "บาท": "baht", "руб": "rub", "₽": "₽", "रुपये": "rupees", "ريال": "riyal", "درهم": "dirham", "دينار": "dinar", "₺": "₺" };
+function foreignRe(l) { return l.cjk ? /[㐀-鿿぀-ヿ가-힯]/ : (/[A-Za-z]/.test(l.script.source) ? /[A-Za-zÀ-ɏẠ-ỹ'’]/ : l.script); }
+function segmentRuns(t, l) {
+  const re = foreignRe(l); const out = []; let cur = null;
+  for (const ch of t) {
+    const glue = /[\s，、。！？：:,.\-–—·]/.test(ch);
+    const kind = glue ? (cur ? cur.foreign : false) : re.test(ch);
+    if (!cur || cur.foreign !== kind) { cur = { s: "", foreign: kind }; out.push(cur); }
+    cur.s += ch;
+  }
+  // glue at the end of a foreign run belongs to the layout, not to the words
+  return out.flatMap(r => { if (!r.foreign) return [r]; const m = /^(\s*)(.*?)([\s，、。！？：:,.\-–—·]*)$/s.exec(r.s); const parts = []; if (m[1]) parts.push({ s: m[1], foreign: false }); if (m[2]) parts.push({ s: m[2], foreign: true }); if (m[3]) parts.push({ s: m[3], foreign: false }); return parts; });
+}
+async function toEnglishInPlace(texts) {
+  const l = L(); const segs = texts.map(t => segmentRuns(t, l));
+  const runs = []; segs.forEach(sg => sg.forEach(r => { if (r.foreign && !CURRENCY_WORDS[r.s]) runs.push(r.s); }));
+  const uniq = [...new Set(runs)]; const en = uniq.length ? await toEnglishPlain(uniq) : []; const map = new Map(uniq.map((u, i) => [u, (en[i] || u).replace(/[.。]$/, "")]));
+  return segs.map(sg => {
+    const parts = sg.map((r, i) => r.foreign ? (CURRENCY_WORDS[r.s] ? ((i && /\d$/.test(sg[i - 1].s) ? " " : "") + CURRENCY_WORDS[r.s]) : (map.get(r.s) || r.s)) : r.s);
+    // "出口 EXIT": the sign already says it in English, say it once
+    for (let i = 0; i < sg.length; i++) if (!sg[i].foreign && /^[A-Za-z][A-Za-z ]+$/.test(sg[i].s.trim())) { const w = sg[i].s.trim().toLowerCase(); if (sg.some((o, j) => o.foreign && j !== i && parts[j].toLowerCase() === w)) parts[i] = " "; }
+    // a word run that ran straight into a number ("五花肉200g") gets the space English needs
+    for (let i = 1; i < parts.length; i++) if (sg[i - 1].foreign && !sg[i].foreign && /^[A-Za-z0-9¥￥$€£₩฿₫₹]/.test(parts[i]) && /\S$/.test(parts[i - 1])) parts[i] = " " + parts[i];
+    return parts.join("").replace(/\s{2,}/g, " ").trim();
+  });
 }
 async function toEnglish(texts) {
   if (L().cjk) {
@@ -201,18 +277,19 @@ async function fromEnglish(text) {
 }
 function tidy(s) { return String(s || "").replace(/^\s*[-–—]\s*/, "").replace(/\s+/g, " ").trim(); }
 function parsePrice(text) {
-  const m = /(?:¥|￥|RMB|人民币|\$|€|£|₩|฿|₫|₹)\s*(\d+(?:[.,]\d{1,2})?)|(\d+(?:[.,]\d{1,2})?)\s*(?:元|块|yuan|RMB|¥|￥|€|\$)/i.exec(text);
-  if (m) { const num = m[1] || m[2]; const unit = /每人|每位|\/位|\/人|per person/i.test(text) ? "per person" : /每份|\/份|per serving/i.test(text) ? "per serving" : ""; return { value: num.replace(",", "."), display: "¥" + num.replace(",", "."), unit, certain: true, raw: m[0] }; }
-  if (camMode === "menu") { const t = /(?:^|\s)(\d{1,4})\s*$/.exec(text); if (t) return { value: t[1], display: "¥" + t[1], unit: "", certain: false, raw: t[1] }; }
+  const m = /(¥|￥|RMB|人民币|\$|€|£|₩|฿|₫|₹|₺)\s*(\d{1,3}(?:[,.]\d{3})+|\d+(?:[.,]\d{1,2})?)|(\d{1,3}(?:[,.]\d{3})+|\d+(?:[.,]\d{1,2})?)\s*(元|块|yuan|RMB|¥|￥|€|\$|원|won|円|yen|บาท|baht|₫|₹|₺|TL|Rp|đ)/i.exec(text);
+  const SYM = { "¥": "¥", "￥": "¥", rmb: "¥", "人民币": "¥", "元": "¥", "块": "¥", yuan: "¥", "$": "$", "€": "€", "£": "£", "₩": "₩", "원": "₩", won: "₩", "円": "¥", yen: "¥", "฿": "฿", "บาท": "฿", baht: "฿", "₫": "₫", "đ": "₫", "₹": "₹", "₺": "₺", tl: "₺", rp: "Rp" };
+  if (m) { const num = m[2] || m[3]; const sym = SYM[(m[1] || m[4]).toLowerCase()] || (m[1] || m[4]); const big = /[,.]\d{3}/.test(num); const value = big ? num.replace(/[,.]/g, "") : num.replace(",", "."); const unit = /每人|每位|\/位|\/人|per person/i.test(text) ? "per person" : /每份|\/份|per serving/i.test(text) ? "per serving" : ""; return { value, display: sym === "Rp" ? "Rp " + num : sym + num, unit, certain: true, raw: m[0] }; }
+  if (camMode === "menu") { const t = /(?:^|\s)(\d{1,4})\s*$/.exec(text); if (t) return { value: t[1], display: (L().cjk && lang !== "ko" ? "¥" : "") + t[1], unit: "", certain: false, raw: t[1] }; }
   return null;
 }
 
 /* ---------------- Camera pipeline ---------------- */
 const video = $("video"), overlay = $("overlay"), stage = $("stage"), hint = $("hint");
 let stream = null, frozen = false, camMode = store.get("camMode", "text"), ocrBusy = false, ocrTimer = null, raf = null;
-const regions = []; let regionSeq = 0; window.__regions = regions; window.__state = () => ({ ocr: !!ocrWorker, rs: video.readyState, busy: ocrBusy, res: { ...res }, stream: !!stream, timer: !!ocrTimer, view });
+const regions = []; let regionSeq = 0; window.__regions = regions; window.__state = () => ({ ocr: !!ocrWorker, probing, lastProbe: Math.round(lastProbe), rs: video.readyState, busy: ocrBusy, res: { ...res }, stream: !!stream, timer: !!ocrTimer, view });
 const work = document.createElement("canvas"), colorWork = document.createElement("canvas"); const thumbA = document.createElement("canvas"), thumbB = document.createElement("canvas");
-const TW = 48, TH = 27; let prevThumb = null, motionAcc = { x: 0, y: 0 };
+const TW = 80, TH = 45; let prevThumb = null, motionAcc = { x: 0, y: 0 };
 function setHint(t, ms = 2000) { hint.textContent = t; hint.classList.toggle("on", !!t); clearTimeout(setHint.t); if (t && ms) setHint.t = setTimeout(() => hint.classList.remove("on"), ms); }
 async function startCamera() {
   if (stream || !navigator.mediaDevices) return;
@@ -239,13 +316,16 @@ function textSim(a, b) {
   const ga = grams(a), gb = grams(b); let inter = 0; for (const [g, n] of ga) if (gb.has(g)) inter += Math.min(n, gb.get(g));
   return 2 * inter / ((la - 1) + (lb - 1));
 }
-const norm = s => s.replace(/\s+/g, " ").replace(/\s*一\s*(?=[¥￥$€]?\s*\d)/g, " — ").replace(/\s*一\s*$/, "").replace(/(?<=[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af])\s+(?=[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af¥￥\d])/g, "").trim();
+const norm = s => s.replace(/\s+/g, " ").replace(/\s*[一ㅡ]\s*-?\s*(?=[¥￥$€₩]?\s*\d)/g, " — ").replace(/\s*[一ㅡ]\s*$/, "").replace(/(?<=[\u3400-\u9fff\u3040-\u30ff])\s+(?=[\u3400-\u9fff\u3040-\u30ff])/g, "").trim();
+let lastBigMove = 0;
 async function scanFrame() {
   if (ocrBusy || frozen || !ocrWorker || video.readyState < 2 || document.hidden) return;
+  // don't read a frame that is still moving: it comes back blurred and noisy, and the noise is what looks like flicker
+  if (performance.now() - lastBigMove < 260 || probing) return;
   ocrBusy = true;
   try {
     const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return;
-    const scale = Math.min(1, 1100 / Math.max(vw, vh));
+    const scale = Math.min(1, 960 / Math.max(vw, vh));
     work.width = Math.round(vw * scale); work.height = Math.round(vh * scale);
     const ctx = work.getContext("2d", { willReadFrequently: true });
     colorWork.width = work.width; colorWork.height = work.height; colorWork.getContext("2d", { willReadFrequently: true }).drawImage(video, 0, 0, work.width, work.height);
@@ -258,11 +338,21 @@ async function scanFrame() {
       .filter(x => x.conf > 50 && x.raw.replace(/[^\p{L}\p{N}]/gu, "").length >= 1 && (autoLang || l.script.test(x.raw) || /[A-Za-z]{2,}|\d/.test(x.raw)))
       .map(x => ({ text: norm(x.raw.replace(/[|_~^`]+/g, "")), conf: x.conf, box: { x: x.b.x0 / work.width, y: x.b.y0 / work.height, w: (x.b.x1 - x.b.x0) / work.width, h: (x.b.y1 - x.b.y0) / work.height } }))
       .filter(x => x.text.length >= 1 && x.box.w > 0.02 && x.box.h > 0.012);
-    // motion that happened while OCR ran: shift the fresh boxes forward so they line up with the current view
-    const dx = motionAcc.x - motionBefore.x, dy = motionAcc.y - motionBefore.y; lines.forEach(x => { x.box.x += dx; x.box.y += dy; });
-    matchRegions(lines);
-    autoMenu();
     considerAutoLang(lines);
+    // doubtful reading in auto mode: let the other scripts have a go at this frame
+    if (autoLang && !probing && performance.now() - lastProbe > probeWait) {
+      const allLines = (data.lines || []).filter(x => x.text.trim().length >= 2);
+      const chars = allLines.reduce((s, x) => s + x.text.trim().length, 0);
+      const meanConf = chars ? allLines.reduce((s, x) => s + x.confidence * x.text.trim().length, 0) / chars : 0;
+      if (allLines.length && meanConf < 70) probeScripts(work);
+    }
+    const foreign = lines.filter(x => isForeign(x.text, l) && x.conf >= 58);
+    // motion that happened while OCR ran: shift the fresh boxes forward so they line up with the current view
+    const dx = motionAcc.x - motionBefore.x, dy = motionAcc.y - motionBefore.y; foreign.forEach(x => { x.box.x += dx; x.box.y += dy; });
+    // a frame read during a big move is not evidence that text went away
+    const moved = Math.abs(dx) + Math.abs(dy) > 0.06 || performance.now() - lastBigMove < 400;
+    matchRegions(foreign, moved);
+    autoMenu();
     const small = (data.lines || []).filter(x => x.confidence > 30 && x.confidence <= 50).length;
     if (!lines.length) setHint(small ? "Move closer or hold steady" : "", small ? 1500 : 0);
     await translatePending();
@@ -293,13 +383,13 @@ function sampleColors(box) {
     return { bg: `rgb(${bg.join(",")})`, fg: `rgb(${fg.join(",")})` };
   } catch (_) { return null; }
 }
-function matchRegions(lines) {
+function matchRegions(lines, moved) {
   const now = performance.now(); const used = new Set();
   for (const r of regions) {
     let best = null, bestScore = 0;
     lines.forEach((ln, i) => {
       if (used.has(i)) return;
-      const sim = textSim(r.text, ln.text); if (sim < 0.55) return;
+      const sim = textSim(r.text, ln.text); if (sim < 0.5) return;
       const dcx = Math.abs((r.box.x + r.box.w / 2) - (ln.box.x + ln.box.w / 2)), dcy = Math.abs((r.box.y + r.box.h / 2) - (ln.box.y + ln.box.h / 2));
       if (dcx > 0.35 || dcy > 0.25) return;
       const score = sim * 2 - (dcx + dcy); if (score > bestScore) { bestScore = score; best = i; }
@@ -307,33 +397,38 @@ function matchRegions(lines) {
     if (best != null) {
       const ln = lines[best]; used.add(best);
       const dx = ln.box.x - r.box.x, dy = ln.box.y - r.box.y, dw = ln.box.w - r.box.w, dh = ln.box.h - r.box.h;
-      const big = Math.abs(dx) > 0.03 || Math.abs(dy) > 0.03; const k = big ? 0.7 : (Math.abs(dx) + Math.abs(dy) + Math.abs(dw) + Math.abs(dh) < 0.012 ? 0 : 0.35);
+      const settled = r.seen >= 3;
+      const big = Math.abs(dx) > 0.03 || Math.abs(dy) > 0.03;
+      const jitter = Math.abs(dx) + Math.abs(dy) + Math.abs(dw) + Math.abs(dh);
+      const k = big ? 0.7 : (jitter < (settled ? 0.01 : 0.008) ? 0 : (settled ? 0.25 : 0.4));
       if (k) r.box = { x: r.box.x + dx * k, y: r.box.y + dy * k, w: r.box.w + dw * k, h: r.box.h + dh * k };
       r.seen++; r.miss = 0; r.lastSeen = now;
-      if (ln.text !== r.text && ln.conf > r.conf + 6 && !r.edited) { r.text = ln.text; r.conf = ln.conf; r.en = null; r.pending = true; r.meta = null; }
-      if (!r.colors || r.seen % 6 === 0) r.colors = sampleColors(ln.box) || r.colors;
+      if (ln.text !== r.text && !r.edited) {
+        // a better reading replaces the text, but the English already on screen stays until the new one is ready
+        if (ln.conf > r.conf + 6 || (r.cand === ln.text && ++r.candN >= 2)) { r.text = ln.text; r.conf = Math.max(ln.conf, r.conf); r.pending = true; r.meta = null; r.cand = null; r.candN = 0; }
+        else if (r.cand !== ln.text) { r.cand = ln.text; r.candN = 1; }
+      } else { r.cand = null; r.candN = 0; }
+      if (!r.colors || r.seen % 8 === 0) r.colors = sampleColors(ln.box) || r.colors;
       else if (ln.conf > r.conf) r.conf = ln.conf;
-    } else { r.miss++; }
+    } else if (!moved) { r.miss++; }
   }
   lines.forEach((ln, i) => { if (!used.has(i)) regions.push({ id: ++regionSeq, text: ln.text, conf: ln.conf, box: ln.box, seen: 1, miss: 0, lastSeen: now, created: now, en: null, pending: true, alpha: 0, colors: sampleColors(ln.box) }); });
-  for (let i = regions.length - 1; i >= 0; i--) { const r = regions[i]; if (r.miss >= 2 || (r.seen < 2 && r.miss >= 1)) regions.splice(i, 1); }
+  // a line has to be read twice before it shows, unless it was read very clearly the first time; settled lines survive a few noisy frames
+  for (let i = regions.length - 1; i >= 0; i--) { const r = regions[i]; if (r.miss >= (r.seen >= 3 ? 3 : 2) || (r.seen < 2 && r.miss >= 1 && r.conf < 80)) regions.splice(i, 1); }
 }
 async function translatePending() {
   const todo = regions.filter(r => r.pending && !r.inflight); if (!todo.length) return;
   todo.forEach(r => r.inflight = true);
   try {
     const srcs = todo.map(r => { const p = parsePrice(r.text); r.price = p; return p ? r.text.replace(p.raw, "").replace(/[:：\-–—·]+\s*$/, "").trim() || r.text : r.text; });
-    const ens = await toEnglish(srcs.map(s => s || " "));
+    // the line as written, with only the foreign words replaced; the name on its own for the dish sheet and the order
+    const [ens, names] = await Promise.all([toEnglishInPlace(todo.map(r => r.text)), toEnglishInPlace(srcs.map(s => s || " "))]);
     todo.forEach((r, i) => {
       r.srcName = srcs[i]; r.meta = glossaryLookup(srcs[i]); r.pending = false; r.inflight = false;
-      let en = ens[i] || r.text; r.enName = en.replace(/[.。]$/, "");
-      if (r.price) { // keep the number where it was: trailing or leading, with the same separator
-        const raw = r.price.raw.trim(); const idx = r.text.indexOf(raw); const sep = /[—–\-:：]\s*$/.test(r.text.slice(0, idx)) ? " — " : "  ";
-        en = idx >= r.text.length / 2 ? en.replace(/[.。]$/, "") + sep + raw : raw + sep + en.replace(/[.。]$/, "");
-      }
-      r.en = en;
+      r.enName = (names[i] || ens[i] || r.text).replace(/[.。]$/, "").replace(/[\s\-–—·:：]+$/, "");
+      r.en = ens[i] || r.text;
     });
-  } catch (e) { todo.forEach(r => { r.inflight = false; }); if (!navigator.onLine && res.toEn !== "ok") setHint("Connect to WiFi once to finish the " + L().name + " pack", 3000); }
+  } catch (e) { console.warn("translate", e); todo.forEach(r => { r.inflight = false; }); if (!navigator.onLine && res.toEn !== "ok") setHint("Connect to WiFi once to finish the " + L().name + " pack", 3000); }
 }
 /* Global motion estimate between frames so overlays follow a pan until the next recognition lands. */
 function estimateMotion() {
@@ -347,7 +442,7 @@ function estimateMotion() {
       for (let y = R; y < TH - R; y += 1) for (let x = R; x < TW - R; x += 1) { const i = ((y * TW) + x) * 4, j = (((y + dy) * TW) + (x + dx)) * 4; sad += Math.abs(cur[i] - prevThumb[j]); n++; }
       sad /= n; if (dx === 0 && dy === 0) zero = sad; if (sad < best.sad) best = { dx, dy, sad };
     }
-    if ((best.dx || best.dy) && best.sad < zero * 0.7 && (Math.abs(best.dx) + Math.abs(best.dy)) >= 1) { const mx = best.dx / TW, my = best.dy / TH; motionAcc.x += mx; motionAcc.y += my; regions.forEach(r => { r.box.x += mx; r.box.y += my; }); }
+    if ((best.dx || best.dy) && best.sad < zero * 0.7 && (Math.abs(best.dx) + Math.abs(best.dy)) >= 1) { const mx = best.dx / TW, my = best.dy / TH; motionAcc.x += mx; motionAcc.y += my; regions.forEach(r => { r.box.x += mx; r.box.y += my; }); if (Math.abs(best.dx) + Math.abs(best.dy) >= 2) { lastBigMove = performance.now(); probeWait = 5000; } }
   }
   prevThumb = cur;
 }
@@ -364,7 +459,7 @@ function renderLoop() {
   const toPx = b => ({ x: ox + b.x * vw * s, y: oy + b.y * vh * s, w: b.w * vw * s, h: b.h * vh * s });
   const dpr = devicePixelRatio;
   for (const rg of regions) {
-    const target = rg.en ? 1 : 0; rg.alpha += (target - rg.alpha) * 0.25; if (rg.alpha < 0.03) continue;
+    const target = rg.en && (rg.seen >= 2 || rg.conf >= 75) ? 1 : 0; rg.alpha += (target - rg.alpha) * 0.25; if (rg.alpha < 0.03) continue;
     const b = toPx(rg.box); rg.px = drawCard(ctx, b, rg, dpr, W);
   }
 }
@@ -383,6 +478,8 @@ function drawReplace(ctx, b, rg, dpr, W) {
   const left = Math.max(2 * dpr, b.x - padX);
   const roomW = Math.min(W - left - 2 * padX - 2 * dpr, Math.max(b.w, 1) * 1.45);
   while (tw > roomW && fs > 9 * dpr) { fs -= dpr; ctx.font = `${wgt} ${fs}px ${font}`; tw = ctx.measureText(title).width; }
+  // the size only changes when the box really changed, so the English doesn't breathe with small jitters
+  if (rg.fs && rg.fsFor === title && Math.abs(fs - rg.fs) < rg.fs * 0.12) { fs = rg.fs; ctx.font = `${wgt} ${fs}px ${font}`; tw = ctx.measureText(title).width; } else { rg.fs = fs; rg.fsFor = title; }
   const visibleW = Math.max(0, Math.min(b.x + b.w, W - 2 * dpr) - Math.max(b.x, 0));
   const cw = Math.min(W - left - 2 * dpr, Math.max(visibleW, tw) + 2 * padX), ch = b.h + 2 * padY;
   const x = left, y = b.y - padY;
@@ -430,7 +527,7 @@ function openRegion(rg) {
     if (isMenu) {
       $("qMinus").onclick = () => { q = Math.max(1, q - 1); qv.textContent = q; };
       $("qPlus").onclick = () => { q++; qv.textContent = q; };
-      $("addOrder").onclick = () => { addToOrder({ zh: orig, en: rg.enName || rg.en, price: rg.price ? rg.price.value : null, priceCertain: !!(rg.price && rg.price.certain), unit: rg.price ? rg.price.unit : "", qty: q }); closeSheet(); toast("Added to your order"); };
+      $("addOrder").onclick = () => { addToOrder({ zh: orig, en: rg.enName || rg.en, price: rg.price ? rg.price.value : null, sym: rg.price ? rg.price.display.replace(/[\d.,\s]+$/, "") : "", priceCertain: !!(rg.price && rg.price.certain), unit: rg.price ? rg.price.unit : "", qty: q }); closeSheet(); toast("Added to your order"); };
       $("askIngr").onclick = () => { closeSheet(); goConversation("restaurant", [["What is in " + (rg.enName || rg.en) + "?", null, orig], ["Does this contain nuts?", null], ["Is this dish spicy?", L().glossary ? "这道菜辣吗？" : null]]); };
     } else {
       $("askThis").onclick = () => { closeSheet(); goConversation(null, [["What does this mean: " + (rg.enName || rg.en) + "?", null, orig]]); };
@@ -457,10 +554,11 @@ $("askBtn").onclick = () => {
 let order = store.get("order", []);
 function saveOrder() { store.set("order", order); renderOrderBar(); renderConvCtx(); }
 function addToOrder(it) { const ex = order.find(o => o.zh === it.zh); if (ex) ex.qty += it.qty; else order.push({ id: Date.now(), confirmed: false, mods: "", ...it }); saveOrder(); }
+const orderSym = () => (order.find(o => o.sym) || {}).sym || "¥";
 function orderSubtotal() { if (!order.length || order.some(o => o.price == null || !o.priceCertain)) return null; return order.reduce((s, o) => s + parseFloat(o.price) * o.qty, 0); }
 function renderOrderBar() {
   const n = order.reduce((s, o) => s + o.qty, 0); $("orderbar").classList.toggle("on", n > 0 && view === "camera");
-  const sub = orderSubtotal(); $("orderCount").textContent = `Your order · ${n} item${n === 1 ? "" : "s"}` + (sub != null ? ` · ¥${sub % 1 ? sub.toFixed(2) : sub}` : "");
+  const sub = orderSubtotal(); $("orderCount").textContent = `Your order · ${n} item${n === 1 ? "" : "s"}` + (sub != null ? ` · ${orderSym()}${sub % 1 ? sub.toFixed(2) : sub}` : "");
   const badge = document.querySelector('.nav button[data-v="conv"] .badge'); if (badge) badge.remove();
   if (n) { const b = document.createElement("span"); b.className = "badge"; b.textContent = n; document.querySelector('.nav button[data-v="conv"]').prepend(b); }
 }
@@ -468,8 +566,8 @@ function orderCardText() { return order.map(o => `${o.zh} × ${o.qty}${o.mods ? 
 function openOrder() {
   const sub = orderSubtotal();
   openSheet(`<div class="eyebrow">Your order</div><h2>${order.length ? "Ready to show." : "Nothing yet."}</h2>
-    <div class="card" id="orderLines">${order.map(o => `<div class="orderline" data-id="${o.id}"><div class="n"><div>${esc(o.en)}</div><div class="cjk">${esc(o.zh)}${o.mods ? " · " + esc(o.mods) : ""}</div></div><div class="ctl row" style="gap:0;border:1px solid var(--line);border-radius:10px"><button class="qm" style="width:36px;height:36px;border:0;background:transparent">−</button><span style="min-width:22px;text-align:center;font-weight:600">${o.qty}</span><button class="qp" style="width:36px;height:36px;border:0;background:transparent">+</button></div><div class="p">${o.price != null ? "¥" + o.price + (o.priceCertain ? "" : "?") : "—"}</div></div>`).join("") || `<div class="empty">Tap a dish in the camera view to add it.</div>`}</div>
-    <p class="sub">${sub != null ? `Estimated subtotal ¥${sub % 1 ? sub.toFixed(2) : sub}. Service charges, tea or rice may be extra.` : order.length ? "Subtotal shown only when every price is readable and certain." : ""}</p>
+    <div class="card" id="orderLines">${order.map(o => `<div class="orderline" data-id="${o.id}"><div class="n"><div>${esc(o.en)}</div><div class="cjk">${esc(o.zh)}${o.mods ? " · " + esc(o.mods) : ""}</div></div><div class="ctl row" style="gap:0;border:1px solid var(--line);border-radius:10px"><button class="qm" style="width:36px;height:36px;border:0;background:transparent">−</button><span style="min-width:22px;text-align:center;font-weight:600">${o.qty}</span><button class="qp" style="width:36px;height:36px;border:0;background:transparent">+</button></div><div class="p">${o.price != null ? (o.sym || "¥") + o.price + (o.priceCertain ? "" : "?") : "—"}</div></div>`).join("") || `<div class="empty">Tap a dish in the camera view to add it.</div>`}</div>
+    <p class="sub">${sub != null ? `Estimated subtotal ${orderSym()}${sub % 1 ? sub.toFixed(2) : sub}. Service charges, tea or rice may be extra.` : order.length ? "Subtotal shown only when every price is readable and certain." : ""}</p>
     ${order.length ? `<button class="btn" id="showCard">Show order card to staff</button><button class="btn ghost" id="toConv">Talk to staff about it</button><button class="btn soft" id="saveMeal">Save this meal</button><button class="link" id="clearOrder">Clear order</button>` : ""}`, () => {
     sheet.querySelectorAll(".orderline").forEach(el => { const o = order.find(x => x.id == el.dataset.id); el.querySelector(".qm").onclick = () => { o.qty--; if (o.qty <= 0) order = order.filter(x => x !== o); saveOrder(); openOrder(); }; el.querySelector(".qp").onclick = () => { o.qty++; saveOrder(); openOrder(); }; });
     if (!order.length) return;
@@ -602,7 +700,7 @@ $("confirmBtn").onclick = () => {
   const sub = orderSubtotal();
   const rows = [];
   if (order.length) rows.push(["Order · 点的菜", order.map(o => `${o.en} × ${o.qty}`).join(", "), orderCardText().replace(/\n/g, "，")]);
-  if (sub != null) rows.push(["Menu subtotal · 菜单小计", `¥${sub}`, `${sub}元`]);
+  if (sub != null) rows.push(["Menu subtotal · 菜单小计", `${orderSym()}${sub}`, L().glossary ? `${sub}元` : `${orderSym()}${sub}`]);
   prices.forEach(p => rows.push(["Price mentioned · 提到的价格", p, p]));
   openSheet(`<div class="eyebrow">Confirm the details · 确认一下</div><h2>Let's check before we finish.</h2>
     ${rows.length ? `<div class="bigcard">${rows.map(r => `<div style="margin-bottom:12px"><div class="eyebrow" style="font-family:var(--body)">${esc(r[0])}</div><div class="zh" style="font-size:clamp(20px,5.5vw,28px)">${esc(r[2])}</div><div class="en">${esc(r[1])}</div></div>`).join("")}</div>` : `<div class="empty">Nothing to confirm yet. Order dishes or have a conversation first.</div>`}
