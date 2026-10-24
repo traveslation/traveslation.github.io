@@ -816,12 +816,30 @@ document.querySelectorAll(".nav button").forEach(b => b.onclick = () => showView
 if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js").catch(e => console.warn("SW", e)); let reloaded = false; navigator.serviceWorker.addEventListener("controllerchange", () => { if (reloaded) return; reloaded = true; if (navigator.serviceWorker.controller) location.reload(); }); }
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
 MT.on(ev => { if (ev.type === "loaded") { if (ev.pair === toEnPair()) res.toEn = "ok"; if (ev.pair === fromEnPair()) res.fromEn = "ok"; updateReady(); } });
+/* Before anything loads: can this phone run the app at all, and is it opened in a real browser?
+   A clear message beats a silent failure. */
+function compatCheck() {
+  const ua = navigator.userAgent || "";
+  const inApp = /FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Line\/|Messenger|Snapchat|TikTok|BytedanceWebview|Twitter|; wv\)/i.test(ua) || (/iPhone|iPad/.test(ua) && !/Safari\//.test(ua) && !navigator.standalone);
+  const problems = [];
+  const simd = (() => { try { return WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11])); } catch (_) { return false; } })();
+  if (!simd) problems.push("Its browser is too old for the on-phone translator (needs iOS 16.4 or newer, or Chrome 91 or newer).");
+  if (typeof DecompressionStream === "undefined") problems.push("Its browser can't unpack the language files (needs iOS 16.4 or newer, or Chrome 80 or newer).");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) problems.push("The camera isn't available to web pages in this browser.");
+  if (!window.isSecureContext) problems.push("The page isn't on a secure address, so the camera is blocked.");
+  if (!problems.length && !inApp) return true;
+  const host = inApp ? `<p>This opened inside another app's built-in browser, which blocks the camera and offline storage.</p><p><b>Open it in ${/iPhone|iPad/.test(ua) ? "Safari" : "Chrome"} instead:</b> tap the menu (··· or the share icon) and choose <b>Open in browser</b>, or copy the address and paste it into ${/iPhone|iPad/.test(ua) ? "Safari" : "Chrome"}.</p>` : "";
+  const list = problems.map(p => `<p>${esc(p)}</p>`).join("");
+  openSheet(`<div class="label">Can't run here</div><h2 style="margin:4px 0 10px">${inApp ? "Open in your browser" : "This phone can't run Traveslator"}</h2>${host}${list}<p class="sub" style="margin-top:12px">Address: <b>traveslator.github.io</b><br>Diagnostic: ${esc(ua.slice(0, 160))}</p><button class="btn" id="copyAddr">Copy address</button>`, () => { $("copyAddr").onclick = () => { navigator.clipboard && navigator.clipboard.writeText("https://traveslator.github.io/").then(() => toast("Copied")).catch(() => {}); }; });
+  return !problems.length;
+}
 (async () => {
   if (store.get("asr")) { /* cached before; mark ready lazily when the worker confirms */ }
   renderOrderBar(); updateReady();
   showView(store.get("view", "camera"));
+  if (!compatCheck()) return;
   autoStock();
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-  if (!standalone && !store.get("seenInstall")) { store.set("seenInstall", true); setTimeout(() => toast(/iPhone|iPad/.test(navigator.userAgent) ? "Tap Share, then Add to Home Screen, to keep this as an app." : "Use your browser menu to install this as an app.", 6000), 1500); }
+  if (!standalone && !store.get("seenInstall") && !sheetwrap.classList.contains("on")) { store.set("seenInstall", true); setTimeout(() => toast(/iPhone|iPad/.test(navigator.userAgent) ? "Tap Share, then Add to Home Screen, to keep this as an app." : "Use your browser menu to install this as an app.", 6000), 1500); }
 })();
 })();
