@@ -168,10 +168,11 @@ let asrWorker = null, asrSeq = 0; const asrPending = new Map();
 function getAsrWorker() {
   if (asrWorker) return asrWorker;
   asrWorker = new Worker("asr-worker.js", { type: "module" });
-  asrWorker.onmessage = ev => { const d = ev.data; if (d.type === "progress") { if (d.total) { progress.asr = d.loaded / d.total; stripProgress(); } return; } if (d.type === "loaded") { res.asr = "ok"; progress.asr = 1; store.set("asr", true); updateReady(); return; } const p = asrPending.get(d.id); if (!p) return; asrPending.delete(d.id); d.ok ? p.resolve(d.result) : p.reject(new Error(d.error)); };
+  asrWorker.onmessage = ev => { const d = ev.data; if (d.type === "progress") { if (d.total) { progress.asr = d.loaded / d.total; stripProgress(); } return; } if (d.type === "loaded") { res.asr = "ok"; progress.asr = 1; store.set("asr", true); updateReady(); if (listening && /Getting listening ready/.test($("convStatus").textContent)) $("convStatus").textContent = listening === "me" ? "Listening to you (offline). Pause when you're done." : "Listening to them (offline). Each sentence shows after a short pause."; return; } const p = asrPending.get(d.id); if (!p) return; asrPending.delete(d.id); d.ok ? p.resolve(d.result) : p.reject(new Error(d.error)); };
   return asrWorker;
 }
 function asrCall(msg) { getAsrWorker(); return new Promise((resolve, reject) => { const id = ++asrSeq; asrPending.set(id, { resolve, reject }); asrWorker.postMessage({ id, ...msg }); }); }
+async function prefetchAsr() { try { await loadAsr(); if (listening == null && asrWorker) { const w = asrWorker; asrWorker = null; w.terminate(); } } catch (e) { console.warn("asr prefetch", e); } }
 async function loadAsr() { if (res.asr === "ok") return; res.asr = "busy"; updateReady(); try { await asrCall({ type: "load" }); res.asr = "ok"; } catch (e) { res.asr = "no"; throw e; } finally { updateReady(); } }
 
 /* First open: stock the current language, with one progress strip. */
@@ -192,6 +193,8 @@ async function autoStock() {
       await Promise.all([getOcr().catch(e => { if (!offline) throw e; }), loadMT("toEn").catch(e => { if (!offline) throw e; }), loadMT("fromEn").catch(e => { if (!offline) throw e; })]);
       $("stripLabel").textContent = res.toEn === "ok" ? "Ready to use offline" : "Connect to WiFi once to finish setup"; stripProgress();
       setTimeout(() => strip.classList.remove("on"), 2500);
+      // the offline listening pack comes down quietly afterwards, so speaking works without signal from the first trip
+      if (navigator.onLine && !store.get("asr")) setTimeout(() => prefetchAsr(), 4000);
     } catch (e) { console.error(e); $("stripLabel").textContent = "Setup paused: " + (navigator.onLine ? e.message : "no connection"); setTimeout(() => strip.classList.remove("on"), 4500); }
   } finally { stocking = false; updateReady(); }
 }
@@ -252,7 +255,7 @@ async function toEnglishInPlace(texts) {
 async function toEnglish(texts) {
   if (L().cjk) {
     // split "出口 EXIT" into the CJK part and the Latin part; translate the CJK, keep the Latin unless it says the same thing
-    const parts = texts.map(t => { const cjk = (t.match(/[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af][\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\s，、。！？：]*/g) || []).join(" ").trim(); const latin = t.replace(/[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af，、。！？：]+/g, " ").replace(/\s+/g, " ").trim(); return { cjk, latin }; });
+    const parts = texts.map(t => { const cjk = (t.match(/[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af][\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\s，、。！？：]*/g) || []).join(" ").trim(); let latin = t.replace(/[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af，、。！？：]+/g, " ").replace(/\s+/g, " ").trim(); if (!/[\p{L}\p{N}]/u.test(latin)) latin = ""; return { cjk, latin }; });
     if (parts.some(p => p.cjk && p.latin)) {
       const en = await toEnglishPlain(parts.map((p, i) => p.cjk || texts[i]));
       return parts.map((p, i) => { if (!p.cjk || !p.latin) return en[i]; const e = en[i].replace(/[.。]$/, ""); return e.toLowerCase() === p.latin.toLowerCase() ? e : e + " · " + p.latin; });
@@ -640,24 +643,36 @@ async function sayEnglish(text, zhKnown, extraZh) {
   if (extraZh && !t.tr.includes(extraZh)) t.tr = t.tr.replace(/[?？。.]$/, "") + (L().cjk ? "：" : ": ") + extraZh;
   t.live = false; renderTurns(); speak(t.tr); pinned = null; renderSuggestions();
 }
-$("typedSend").onclick = () => { const v = $("typedText").value.trim(); if (!v) return; $("typedText").value = ""; sayEnglish(v); };
+$("typedSend").onclick = () => { unlockTts(); const v = $("typedText").value.trim(); if (!v) return; $("typedText").value = ""; sayEnglish(v); };
 $("typedText").addEventListener("keydown", e => { if (e.key === "Enter") $("typedSend").click(); });
-function speak(text) {
+let ttsUnlocked = false;
+/* iPhones only allow spoken playback that starts from a tap: the first tap in the conversation primes it. */
+function unlockTts() { if (ttsUnlocked || !window.speechSynthesis) return; ttsUnlocked = true; try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); } catch (_) {} }
+function voicesReady() { if (!window.speechSynthesis) return Promise.resolve([]); const v = speechSynthesis.getVoices(); if (v.length) return Promise.resolve(v); return new Promise(res => { let done = false; const fin = () => { if (!done) { done = true; res(speechSynthesis.getVoices()); } }; speechSynthesis.addEventListener("voiceschanged", fin, { once: true }); setTimeout(fin, 1200); }); }
+async function speak(text) {
   if (!text || !window.speechSynthesis) { $("convStatus").textContent = "Spoken playback isn't available here. Show the screen instead."; return; }
-  speechSynthesis.cancel(); const code = L().speech; const u = new SpeechSynthesisUtterance(text); u.lang = code; u.rate = 0.9;
-  const v = speechSynthesis.getVoices().find(v => v.lang.replace("_", "-").toLowerCase().startsWith(code.slice(0, 2).toLowerCase())); if (v) u.voice = v;
-  speechSynthesis.speak(u); if (!v) $("convStatus").textContent = `No ${L().name} voice on this phone. Show the screen instead.`;
+  const code = L().speech; const voices = await voicesReady();
+  speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = code; u.rate = 0.9;
+  const v = voices.find(v => v.lang.replace("_", "-").toLowerCase() === code.toLowerCase()) || voices.find(v => v.lang.replace("_", "-").toLowerCase().startsWith(code.slice(0, 2).toLowerCase())); if (v) u.voice = v;
+  u.onerror = e => { if (e.error !== "interrupted" && e.error !== "canceled") $("convStatus").textContent = "Couldn't play that aloud. Show the screen instead."; };
+  speechSynthesis.speak(u);
+  $("convStatus").textContent = v ? "" : `No ${L().name} voice on this phone yet. Show the screen, or add one in Settings › Accessibility › Spoken Content › Voices.`;
 }
 /* Speak English: your side. Live recognizer in English, then translate. */
-let recog = null;
+let recog = null, srBroken = false;
 function stopRecog() { if (recog) { try { recog.onend = null; recog.stop(); } catch (_) {} recog = null; } listening = null; $("speakBtn").classList.remove("on"); $("listenBtn").classList.remove("on"); stopOfflineCapture(); }
 function startRecog(code, who) {
-  if (!SR) { if (who === "them") return startOfflineCapture(); $("convStatus").textContent = "Speech input isn't available in this browser. Type instead."; return; }
+  unlockTts();
+  // no live recognizer (home-screen apps on iPhone, some browsers), or it failed before on this phone: listen offline
+  if (!SR || srBroken || !navigator.onLine) return startOfflineCapture(who);
   stopRecog(); listening = who; (who === "me" ? $("speakBtn") : $("listenBtn")).classList.add("on");
   recog = new SR(); recog.lang = code; recog.continuous = who === "them" && !shortTurns; recog.interimResults = true;
-  let liveT = null;
+  let liveT = null, heard = false;
+  const fallback = why => { console.warn("live speech", why); srBroken = true; stopRecog(); startOfflineCapture(who); };
+  recog.onaudiostart = recog.onsoundstart = recog.onspeechstart = () => { heard = true; };
+  const watchdog = setTimeout(() => { if (listening === who && recog && !heard) fallback("no audio"); }, 4000);
   recog.onresult = async ev => {
-    let interim = "", finals = [];
+    heard = true; let interim = "", finals = [];
     for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) finals.push(r[0].transcript.trim()); else interim += r[0].transcript; }
     if (interim.trim()) { if (!liveT) liveT = addTurn({ who, src: interim.trim(), tr: "", live: true }); else { liveT.src = interim.trim(); renderTurns(); } }
     for (const f of finals) {
@@ -667,33 +682,61 @@ function startRecog(code, who) {
       renderSuggestions();
     }
   };
-  recog.onerror = e => { if (e.error === "not-allowed") { $("convStatus").textContent = "Microphone blocked. Allow it in Settings."; stopRecog(); } else if (e.error === "network") { $("convStatus").textContent = "No signal for live speech. Switching to offline listening."; stopRecog(); if (who === "them") startOfflineCapture(); } else if (e.error !== "no-speech" && e.error !== "aborted") console.warn(e.error); };
-  recog.onend = () => { if (listening === who && recog && recog.continuous) { try { recog.start(); } catch (_) {} } else if (listening === who) stopRecog(); };
-  recog.start(); $("convStatus").textContent = who === "me" ? "Listening to you…" : "Listening to them…";
+  recog.onerror = e => { clearTimeout(watchdog); if (e.error === "not-allowed") { $("convStatus").textContent = "Microphone blocked. Allow it in Settings."; stopRecog(); } else if (e.error === "no-speech" || e.error === "aborted") { /* fine */ } else { $("convStatus").textContent = "Switching to offline listening…"; fallback(e.error); } };
+  recog.onend = () => { clearTimeout(watchdog); if (listening === who && recog && recog.continuous) { try { recog.start(); } catch (_) {} } else if (listening === who) stopRecog(); };
+  try { recog.start(); } catch (e) { return fallback(e.message); }
+  $("convStatus").textContent = who === "me" ? "Listening to you…" : "Listening to them…";
 }
 $("speakBtn").onclick = () => listening === "me" ? stopRecog() : startRecog("en-US", "me");
 $("listenBtn").onclick = () => listening === "them" ? stopRecog() : startRecog(L().speech, "them");
 /* Offline capture → Whisper */
 let audioCtx = null, procNode = null, srcNode = null, micStream = null, chunks = [], chunkLen = 0, asrQueue = Promise.resolve();
 function downsample(buf, from) { if (from === 16000) return buf; const ratio = from / 16000, n = Math.round(buf.length / ratio), out = new Float32Array(n); for (let i = 0, o = 0; i < n; i++) { const nxt = Math.round((i + 1) * ratio); let s = 0, c = 0; for (; o < nxt && o < buf.length; o++) { s += buf[o]; c++; } out[i] = c ? s / c : 0; } return out; }
-async function startOfflineCapture() {
-  if (res.asr !== "ok") { $("convStatus").textContent = navigator.onLine ? "Getting offline listening ready…" : "Offline listening pack isn't downloaded yet."; if (navigator.onLine) loadAsr().catch(() => {}); if (!navigator.onLine) return; }
+let captureWho = "them", lastLoud = 0, spoke = false;
+async function startOfflineCapture(who) {
+  who = who || "them"; stopRecog(); captureWho = who;
+  if (res.asr !== "ok" && !store.get("asr")) { if (!navigator.onLine) { $("convStatus").textContent = "The offline listening pack isn't on this phone yet. Connect once and open Ready › Set up for travel."; return; } $("convStatus").textContent = "Getting listening ready (one-time download)…"; loadAsr().catch(() => { $("convStatus").textContent = "Couldn't download the listening pack. Try again on WiFi."; }); }
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)(); await audioCtx.resume();
-    srcNode = audioCtx.createMediaStreamSource(micStream); procNode = audioCtx.createScriptProcessor(4096, 1, 1); chunks = []; chunkLen = 0;
-    procNode.onaudioprocess = e => { const d = downsample(e.inputBuffer.getChannelData(0), audioCtx.sampleRate); chunks.push(new Float32Array(d)); chunkLen += d.length; if (chunkLen >= 16000 * 6) flushChunk(); };
+    srcNode = audioCtx.createMediaStreamSource(micStream); procNode = audioCtx.createScriptProcessor(4096, 1, 1); chunks = []; chunkLen = 0; lastLoud = 0; spoke = false;
+    const sr = audioCtx.sampleRate;
+    procNode.onaudioprocess = e => {
+      if (!audioCtx) return;
+      const raw = e.inputBuffer.getChannelData(0); let sum = 0; for (let i = 0; i < raw.length; i += 4) sum += raw[i] * raw[i]; const rms = Math.sqrt(sum / (raw.length / 4));
+      const now = performance.now(); if (rms > 0.012) { lastLoud = now; spoke = true; }
+      const d = downsample(raw, sr); chunks.push(new Float32Array(d)); chunkLen += d.length;
+      // a sentence ends with a pause: send it as soon as the speaker goes quiet, or every few seconds while they keep talking
+      if ((spoke && now - lastLoud > 900 && chunkLen >= 16000 * 1.2) || chunkLen >= 16000 * 8) { flushChunk(); spoke = false; }
+      else if (!spoke && chunkLen >= 16000 * 3) { chunks = chunks.slice(-4); chunkLen = chunks.reduce((s, c) => s + c.length, 0); }
+    };
     srcNode.connect(procNode); procNode.connect(audioCtx.destination);
-    listening = "them"; $("listenBtn").classList.add("on"); $("convStatus").textContent = "Listening offline. Speech is processed every few seconds.";
-  } catch (e) { $("convStatus").textContent = "Microphone blocked. Allow it in Settings."; }
+    listening = who; (who === "me" ? $("speakBtn") : $("listenBtn")).classList.add("on");
+    if (res.asr === "ok" || store.get("asr")) $("convStatus").textContent = who === "me" ? "Listening to you (offline). Pause when you're done." : "Listening to them (offline). Each sentence shows after a short pause.";
+  } catch (e) { $("convStatus").textContent = "Microphone blocked. Allow it in Settings."; stopRecog(); }
 }
 function flushChunk() {
   if (!chunkLen) return; const all = new Float32Array(chunkLen); let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; } chunks = []; chunkLen = 0;
   const rms = Math.sqrt(all.reduce((s, v) => s + v * v, 0) / all.length); if (rms < 0.004) return;
-  const t = addTurn({ who: "them", src: "", tr: "", live: true });
-  asrQueue = asrQueue.then(async () => { try { const r = await asrCall({ type: "asr", audio: all, task: "transcribe", language: autoLang ? null : L().whisper }); if (autoLang && r.language && r.language !== L().whisper) { const k = Object.keys(LANGS).find(x => LANGS[x].whisper === r.language); if (k) { setHint(LANGS[k].name + " detected", 2000); setLang(k); } } if (!r.text) { turns = turns.filter(x => x !== t); renderTurns(); return; } t.src = r.text; renderTurns(); t.tr = (await toEnglish([r.text]))[0]; t.live = false; renderTurns(); renderSuggestions(); } catch (e) { t.src = ""; t.tr = "Couldn't process that bit."; t.live = false; renderTurns(); } });
+  const who = captureWho; const t = addTurn({ who, src: "", tr: "", live: true });
+  asrQueue = asrQueue.then(async () => {
+    try {
+      if (who === "me") {
+        const r = await asrCall({ type: "asr", audio: all, task: "transcribe", language: "en" });
+        if (!r.text) { turns = turns.filter(x => x !== t); renderTurns(); return; }
+        t.src = r.text; renderTurns(); try { t.tr = await fromEnglish(r.text); } catch (e) { t.tr = "(translation unavailable)"; } t.live = false; renderTurns(); speak(t.tr); renderSuggestions();
+        if (listening === "me") stopRecog();
+      } else {
+        const r = await asrCall({ type: "asr", audio: all, task: "transcribe", language: autoLang ? null : L().whisper, allowed: Object.values(LANGS).map(l => l.whisper), fallback: L().whisper });
+        if (autoLang && r.language && r.language !== L().whisper) { const k = Object.keys(LANGS).find(x => LANGS[x].whisper === r.language); if (k && r.language !== "en") { setHint(LANGS[k].name + " detected", 2000); setLang(k); } }
+        if (!r.text) { turns = turns.filter(x => x !== t); renderTurns(); return; }
+        t.src = r.text; renderTurns(); t.tr = (await toEnglish([r.text]))[0]; t.live = false; renderTurns(); renderSuggestions();
+        if (shortTurns && listening === "them") stopRecog();
+      }
+    } catch (e) { console.warn("asr", e); t.src = ""; t.tr = res.asr === "ok" ? "Couldn't process that bit." : "Listening pack is still downloading. Try again in a moment."; t.live = false; renderTurns(); }
+  });
 }
-function stopOfflineCapture() { if (procNode) { try { procNode.disconnect(); srcNode.disconnect(); } catch (_) {} } if (micStream) micStream.getTracks().forEach(x => x.stop()); if (audioCtx) audioCtx.close().catch(() => {}); if (chunkLen) flushChunk(); procNode = srcNode = audioCtx = micStream = null; }
+function stopOfflineCapture() { if (procNode) { try { procNode.disconnect(); srcNode.disconnect(); } catch (_) {} } if (micStream) micStream.getTracks().forEach(x => x.stop()); if (audioCtx) audioCtx.close().catch(() => {}); if (chunkLen && spoke) flushChunk(); chunks = []; chunkLen = 0; procNode = srcNode = audioCtx = micStream = null; }
 /* Confirm details and rescue */
 $("confirmBtn").onclick = () => {
   const prices = turns.filter(t => t.who === "them").flatMap(t => (t.src.match(/\d+(?:\.\d+)?\s*(?:元|块)|[¥￥]\s*\d+(?:\.\d+)?/g) || []));

@@ -17,9 +17,9 @@ async function detectLanguage(p, audio) {
   const ids = typeof out.tolist === "function" ? out.tolist()[0] : Array.from(out.data); const tok = Number(ids[ids.length - 1]);
   const hit = Object.entries(gc.lang_to_id || {}).find(([, v]) => Number(v) === tok); return hit ? hit[0].replace(/[<|>]/g, "") : null;
 }
-async function asr(audio, task, language) {
+async function asr(audio, task, language, allowed, fallback) {
   const p = await load(); let lang = language || null;
-  if (!lang) { try { lang = await detectLanguage(p, audio); } catch (e) { console.warn(e); } }
+  if (!lang) { try { lang = await detectLanguage(p, audio); } catch (e) { console.warn(e); } if (allowed && allowed.length && !allowed.includes(lang)) lang = fallback || lang; }
   const out = await p(audio, { task: task || "transcribe", chunk_length_s: 30, stride_length_s: 5, return_timestamps: false, language: lang || "en" });
   return { text: (out && out.text ? out.text : "").trim(), language: lang || "en" };
 }
@@ -28,7 +28,7 @@ self.onmessage = async (ev) => {
   try {
     let result;
     if (type === "load") { await load(); result = true; }
-    else if (type === "asr") result = await asr(ev.data.audio, ev.data.task, ev.data.language);
+    else if (type === "asr") result = await asr(ev.data.audio, ev.data.task, ev.data.language, ev.data.allowed, ev.data.fallback);
     else throw new Error("unknown " + type);
     self.postMessage({ id, ok: true, result });
   } catch (e) { self.postMessage({ id, ok: false, error: (e && e.message) || String(e) }); }
